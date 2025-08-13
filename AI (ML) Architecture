@@ -1,0 +1,2218 @@
+// ===== AI/ML SERVICE ARCHITECTURE =====
+// src/shared/services/ai/aiService.ts
+import * as tf from '@tensorflow/tfjs';
+import { pipeline } from '@huggingface/inference';
+
+interface AIConfig {
+  apiKey: string;
+  modelEndpoints: {
+    styleMatching: string;
+    imageRecognition: string;
+    colorAnalysis: string;
+    sizeRecommendation: string;
+  };
+}
+
+export class AIService {
+  private static instance: AIService;
+  private config: AIConfig;
+  private models: Map<string, any> = new Map();
+  private initialized = false;
+
+  constructor(config: AIConfig) {
+    this.config = config;
+  }
+
+  static getInstance(config?: AIConfig): AIService {
+    if (!AIService.instance && config) {
+      AIService.instance = new AIService(config);
+    }
+    return AIService.instance;
+  }
+
+  async initialize() {
+    if (this.initialized) return;
+
+    // Load TensorFlow.js models
+    await tf.ready();
+    
+    // Load style matching model
+    const styleModel = await tf.loadLayersModel('/models/style-matching/model.json');
+    this.models.set('style-matching', styleModel);
+
+    // Load image classification model
+    const classificationModel = await tf.loadLayersModel('/models/classification/model.json');
+    this.models.set('classification', classificationModel);
+
+    // Initialize Hugging Face pipelines
+    const imageToText = await pipeline('image-to-text', 'Salesforce/blip-image-captioning-base');
+    this.models.set('image-to-text', imageToText);
+
+    this.initialized = true;
+  }
+
+  getModel(name: string) {
+    return this.models.get(name);
+  }
+}
+
+// ===== OUTFIT RECOMMENDATIONS =====
+// src/features/ai/services/outfitRecommendationService.ts
+import * as tf from '@tensorflow/tfjs';
+import { ClothingItem } from '@/features/closet/types';
+import { WeatherData } from '@/shared/services/weather/weatherService';
+
+interface StyleProfile {
+  userId: string;
+  preferences: {
+    styles: string[];
+    colors: string[];
+    brands: string[];
+    avoidColors: string[];
+    avoidStyles: string[];
+  };
+  bodyMeasurements?: {
+    height: number;
+    weight: number;
+    bodyType: string;
+  };
+  stylePersonality: 'classic' | 'trendy' | 'casual' | 'formal' | 'eclectic';
+}
+
+interface OutfitRecommendation {
+  id: string;
+  items: ClothingItem[];
+  score: number;
+  reasoning: string[];
+  occasion: string;
+  weather?: WeatherData;
+  trendScore: number;
+  personalizedScore: number;
+  colorHarmonyScore: number;
+}
+
+export class OutfitRecommendationService {
+  private aiService: AIService;
+  private userProfiles: Map<string, StyleProfile> = new Map();
+  private trendData: Map<string, number> = new Map();
+
+  constructor(aiService: AIService) {
+    this.aiService = aiService;
+    this.loadTrendData();
+  }
+
+  async generateRecommendations(
+    userId: string,
+    occasion: string,
+    weather?: WeatherData,
+    preferences?: Partial<StyleProfile['preferences']>
+  ): Promise<OutfitRecommendation[]> {
+    const userProfile = await this.getUserProfile(userId);
+    const closetItems = await this.getUserClosetItems(userId);
+    
+    // Generate outfit combinations
+    const combinations = this.generateOutfitCombinations(closetItems, occasion);
+    
+    // Score each combination
+    const scoredOutfits = await Promise.all(
+      combinations.map(combo => this.scoreOutfit(combo, userProfile, occasion, weather))
+    );
+    
+    // Sort by score and return top recommendations
+    return scoredOutfits
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+      .map((outfit, index) => ({
+        ...outfit,
+        id: `rec-${Date.now()}-${index}`,
+      }));
+  }
+
+  private async scoreOutfit(
+    items: ClothingItem[],
+    profile: StyleProfile,
+    occasion: string,
+    weather?: WeatherData
+  ): Promise<OutfitRecommendation> {
+    const model = this.aiService.getModel('style-matching');
+    
+    // Prepare input features
+    const features = this.extractOutfitFeatures(items, profile, occasion, weather);
+    const input = tf.tensor2d([features]);
+    
+    // Get ML model prediction
+    const prediction = model.predict(input) as tf.Tensor;
+    const mlScore = (await prediction.data())[0];
+    
+    // Calculate component scores
+    const colorHarmonyScore = this.calculateColorHarmony(items);
+    const trendScore = this.calculateTrendScore(items);
+    const personalizedScore = this.calculatePersonalizationScore(items, profile);
+    const weatherScore = weather ? this.calculateWeatherAppropriateness(items, weather) : 1;
+    
+    // Combine scores
+    const finalScore = (
+      mlScore * 0.3 +
+      colorHarmonyScore * 0.25 +
+      personalizedScore * 0.25 +
+      trendScore * 0.1 +
+      weatherScore * 0.1
+    );
+    
+    // Generate reasoning
+    const reasoning = this.generateReasoningExplanation(
+      items,
+      { mlScore, colorHarmonyScore, personalizedScore, trendScore, weatherScore }
+    );
+    
+    // Cleanup
+    input.dispose();
+    prediction.dispose();
+    
+    return {
+      id: '',
+      items,
+      score: finalScore,
+      reasoning,
+      occasion,
+      weather,
+      trendScore,
+      personalizedScore,
+      colorHarmonyScore,
+    };
+  }
+
+  private calculateColorHarmony(items: ClothingItem[]): number {
+    const colors = items.flatMap(item => item.color.map(c => c.hex));
+    
+    // Convert to HSL for better color analysis
+    const hslColors = colors.map(this.hexToHSL);
+    
+    let harmonyScore = 1;
+    
+    // Check for color schemes
+    if (this.isMonochromatic(hslColors)) harmonyScore = 0.9;
+    else if (this.isAnalogous(hslColors)) harmonyScore = 0.85;
+    else if (this.isComplementary(hslColors)) harmonyScore = 0.8;
+    else if (this.isTriadic(hslColors)) harmonyScore = 0.75;
+    
+    // Penalize too many colors
+    if (colors.length > 4) harmonyScore *= 0.8;
+    
+    return harmonyScore;
+  }
+
+  private hexToHSL(hex: string): { h: number; s: number; l: number } {
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    
+    if (max === min) {
+      return { h: 0, s: 0, l };
+    }
+    
+    const d = max - min;
+    const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    
+    let h;
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+      default: h = 0;
+    }
+    
+    return { h: h * 360, s, l };
+  }
+
+  private isMonochromatic(colors: { h: number; s: number; l: number }[]): boolean {
+    const hues = colors.map(c => c.h);
+    const hueRange = Math.max(...hues) - Math.min(...hues);
+    return hueRange < 30;
+  }
+
+  private isAnalogous(colors: { h: number; s: number; l: number }[]): boolean {
+    const hues = colors.map(c => c.h).sort((a, b) => a - b);
+    const maxGap = Math.max(...hues.map((h, i) => 
+      i === 0 ? 0 : h - hues[i - 1]
+    ));
+    return maxGap < 60;
+  }
+
+  private isComplementary(colors: { h: number; s: number; l: number }[]): boolean {
+    if (colors.length !== 2) return false;
+    const hueDiff = Math.abs(colors[0].h - colors[1].h);
+    return Math.abs(hueDiff - 180) < 30;
+  }
+
+  private isTriadic(colors: { h: number; s: number; l: number }[]): boolean {
+    if (colors.length !== 3) return false;
+    const hues = colors.map(c => c.h).sort((a, b) => a - b);
+    const gaps = [
+      hues[1] - hues[0],
+      hues[2] - hues[1],
+      (360 - hues[2]) + hues[0]
+    ];
+    return gaps.every(gap => Math.abs(gap - 120) < 30);
+  }
+
+  private calculateTrendScore(items: ClothingItem[]): number {
+    let score = 0;
+    let count = 0;
+    
+    items.forEach(item => {
+      // Check item tags against trend data
+      item.tags.forEach(tag => {
+        const trendValue = this.trendData.get(tag.toLowerCase()) || 0.5;
+        score += trendValue;
+        count++;
+      });
+      
+      // Check category trends
+      const categoryTrend = this.trendData.get(item.category) || 0.5;
+      score += categoryTrend;
+      count++;
+    });
+    
+    return count > 0 ? score / count : 0.5;
+  }
+
+  private async loadTrendData() {
+    // In production, this would fetch from a trend analysis API
+    const mockTrends = {
+      'oversized': 0.9,
+      'minimalist': 0.85,
+      'vintage': 0.8,
+      'sustainable': 0.95,
+      'athleisure': 0.75,
+      'cottagecore': 0.7,
+      'y2k': 0.85,
+      'tops': 0.6,
+      'bottoms': 0.6,
+      'dresses': 0.7,
+      'outerwear': 0.8,
+    };
+    
+    Object.entries(mockTrends).forEach(([key, value]) => {
+      this.trendData.set(key, value);
+    });
+  }
+
+  private generateOutfitCombinations(
+    items: ClothingItem[],
+    occasion: string
+  ): ClothingItem[][] {
+    const combinations: ClothingItem[][] = [];
+    
+    // Group items by category
+    const itemsByCategory = this.groupByCategory(items);
+    
+    // Generate valid combinations based on occasion
+    const rules = this.getOccasionRules(occasion);
+    
+    // Basic outfit structure
+    const structures = [
+      ['tops', 'bottoms', 'shoes'],
+      ['dresses', 'shoes'],
+      ['tops', 'bottoms', 'outerwear', 'shoes'],
+    ];
+    
+    structures.forEach(structure => {
+      if (this.isValidStructureForOccasion(structure, rules)) {
+        const outfits = this.generateFromStructure(structure, itemsByCategory);
+        combinations.push(...outfits.slice(0, 50)); // Limit combinations
+      }
+    });
+    
+    return combinations;
+  }
+
+  private groupByCategory(items: ClothingItem[]): Record<string, ClothingItem[]> {
+    return items.reduce((acc, item) => {
+      if (!acc[item.category]) acc[item.category] = [];
+      acc[item.category].push(item);
+      return acc;
+    }, {} as Record<string, ClothingItem[]>);
+  }
+
+  private getOccasionRules(occasion: string) {
+    const rules: Record<string, any> = {
+      'work': {
+        required: ['tops', 'bottoms'],
+        avoid: ['swimwear', 'activewear'],
+        preferFormal: true,
+      },
+      'casual': {
+        flexible: true,
+        allowAll: true,
+      },
+      'formal': {
+        required: ['dresses'],
+        alternative: ['tops', 'bottoms'],
+        preferFormal: true,
+        avoid: ['activewear', 'swimwear'],
+      },
+      'sport': {
+        required: ['activewear'],
+        preferCasual: true,
+      },
+    };
+    
+    return rules[occasion] || rules.casual;
+  }
+
+  private generateFromStructure(
+    structure: string[],
+    itemsByCategory: Record<string, ClothingItem[]>
+  ): ClothingItem[][] {
+    const combinations: ClothingItem[][] = [];
+    
+    // Recursive function to generate combinations
+    const generate = (index: number, current: ClothingItem[]) => {
+      if (index === structure.length) {
+        combinations.push([...current]);
+        return;
+      }
+      
+      const category = structure[index];
+      const items = itemsByCategory[category] || [];
+      
+      // Limit items per category to avoid explosion
+      const limitedItems = items.slice(0, 5);
+      
+      limitedItems.forEach(item => {
+        current.push(item);
+        generate(index + 1, current);
+        current.pop();
+      });
+    };
+    
+    generate(0, []);
+    return combinations;
+  }
+}
+
+// ===== IMAGE RECOGNITION =====
+// src/features/ai/services/imageRecognitionService.ts
+import * as tf from '@tensorflow/tfjs';
+import * as cocoSsd from '@tensorflow-models/coco-ssd';
+import * as mobilenet from '@tensorflow-models/mobilenet';
+
+interface ImageAnalysis {
+  category: string;
+  subcategory?: string;
+  confidence: number;
+  colors: ColorInfo[];
+  patterns: PatternInfo[];
+  brand?: BrandInfo;
+  tags: string[];
+  attributes: ClothingAttributes;
+}
+
+interface ColorInfo {
+  hex: string;
+  name: string;
+  percentage: number;
+  isPrimary: boolean;
+}
+
+interface PatternInfo {
+  type: string;
+  confidence: number;
+}
+
+interface BrandInfo {
+  name: string;
+  confidence: number;
+  logoLocation?: { x: number; y: number; width: number; height: number };
+}
+
+interface ClothingAttributes {
+  sleeve?: 'short' | 'long' | 'sleeveless';
+  neckline?: string;
+  fit?: 'slim' | 'regular' | 'loose' | 'oversized';
+  length?: 'crop' | 'regular' | 'long';
+  material?: string[];
+}
+
+export class ImageRecognitionService {
+  private objectDetectionModel: cocoSsd.ObjectDetection | null = null;
+  private classificationModel: mobilenet.MobileNet | null = null;
+  private customModel: tf.LayersModel | null = null;
+  private brandDetectionModel: tf.GraphModel | null = null;
+  private colorThief: any;
+
+  async initialize() {
+    // Load pre-trained models
+    this.objectDetectionModel = await cocoSsd.load();
+    this.classificationModel = await mobilenet.load();
+    
+    // Load custom fashion-specific models
+    this.customModel = await tf.loadLayersModel('/models/fashion-classifier/model.json');
+    this.brandDetectionModel = await tf.loadGraphModel('/models/brand-detection/model.json');
+    
+    // Initialize color extraction library
+    const { default: ColorThief } = await import('colorthief');
+    this.colorThief = new ColorThief();
+  }
+
+  async analyzeImage(imageFile: File): Promise<ImageAnalysis> {
+    const imageElement = await this.fileToImage(imageFile);
+    
+    // Run multiple analyses in parallel
+    const [
+      category,
+      colors,
+      patterns,
+      brand,
+      attributes
+    ] = await Promise.all([
+      this.detectCategory(imageElement),
+      this.extractColors(imageElement),
+      this.detectPatterns(imageElement),
+      this.detectBrand(imageElement),
+      this.extractAttributes(imageElement),
+    ]);
+    
+    // Generate tags based on all analyses
+    const tags = this.generateTags({
+      category,
+      colors,
+      patterns,
+      brand,
+      attributes,
+    });
+    
+    return {
+      ...category,
+      colors,
+      patterns,
+      brand,
+      tags,
+      attributes,
+    };
+  }
+
+  private async detectCategory(image: HTMLImageElement): Promise<{
+    category: string;
+    subcategory?: string;
+    confidence: number;
+  }> {
+    // Convert image to tensor
+    const tensor = tf.browser.fromPixels(image)
+      .resizeNearestNeighbor([224, 224])
+      .expandDims()
+      .div(255.0);
+    
+    // Get predictions from custom model
+    const predictions = await this.customModel!.predict(tensor) as tf.Tensor;
+    const probabilities = await predictions.data();
+    
+    // Fashion-specific categories
+    const categories = [
+      'tops', 'bottoms', 'dresses', 'outerwear', 
+      'shoes', 'accessories', 'bags', 'jewelry'
+    ];
+    
+    const subcategories: Record<string, string[]> = {
+      'tops': ['t-shirt', 'shirt', 'blouse', 'sweater', 'hoodie', 'tank-top'],
+      'bottoms': ['jeans', 'pants', 'shorts', 'skirt', 'leggings'],
+      'dresses': ['casual', 'formal', 'maxi', 'mini', 'midi'],
+      'shoes': ['sneakers', 'boots', 'heels', 'flats', 'sandals'],
+    };
+    
+    // Find category with highest confidence
+    const maxIndex = probabilities.indexOf(Math.max(...probabilities));
+    const category = categories[Math.floor(maxIndex / 10)]; // Assuming 10 subcategories per category
+    const subcategoryIndex = maxIndex % 10;
+    
+    // Cleanup
+    tensor.dispose();
+    predictions.dispose();
+    
+    return {
+      category,
+      subcategory: subcategories[category]?.[subcategoryIndex],
+      confidence: probabilities[maxIndex],
+    };
+  }
+
+  private async extractColors(image: HTMLImageElement): Promise<ColorInfo[]> {
+    // Get dominant colors
+    const palette = await this.colorThief.getPalette(image, 5);
+    
+    // Convert RGB to hex and name colors
+    const colors = palette.map((rgb: number[], index: number) => ({
+      hex: this.rgbToHex(rgb),
+      name: this.getColorName(rgb),
+      percentage: this.estimateColorPercentage(rgb, image),
+      isPrimary: index === 0,
+    }));
+    
+    return colors;
+  }
+
+  private rgbToHex([r, g, b]: number[]): string {
+    return '#' + [r, g, b].map(x => {
+      const hex = x.toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    }).join('');
+  }
+
+  private getColorName([r, g, b]: number[]): string {
+    // Simplified color naming - in production, use a proper color naming library
+    const colors: Record<string, { r: number; g: number; b: number }> = {
+      'Black': { r: 0, g: 0, b: 0 },
+      'White': { r: 255, g: 255, b: 255 },
+      'Red': { r: 255, g: 0, b: 0 },
+      'Green': { r: 0, g: 255, b: 0 },
+      'Blue': { r: 0, g: 0, b: 255 },
+      'Yellow': { r: 255, g: 255, b: 0 },
+      'Pink': { r: 255, g: 192, b: 203 },
+      'Gray': { r: 128, g: 128, b: 128 },
+      'Brown': { r: 165, g: 42, b: 42 },
+      'Navy': { r: 0, g: 0, b: 128 },
+    };
+    
+    // Find closest color
+    let minDistance = Infinity;
+    let closestColor = 'Unknown';
+    
+    Object.entries(colors).forEach(([name, color]) => {
+      const distance = Math.sqrt(
+        Math.pow(r - color.r, 2) +
+        Math.pow(g - color.g, 2) +
+        Math.pow(b - color.b, 2)
+      );
+      
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestColor = name;
+      }
+    });
+    
+    return closestColor;
+  }
+
+  private estimateColorPercentage(rgb: number[], image: HTMLImageElement): number {
+    // Simplified estimation - in production, analyze actual pixel data
+    return Math.random() * 30 + 10; // 10-40%
+  }
+
+  private async detectPatterns(image: HTMLImageElement): Promise<PatternInfo[]> {
+    const tensor = tf.browser.fromPixels(image)
+      .resizeNearestNeighbor([224, 224])
+      .expandDims()
+      .div(255.0);
+    
+    // Use custom pattern detection model
+    const patterns = [
+      'solid', 'striped', 'checkered', 'floral', 
+      'geometric', 'abstract', 'animal-print', 'polka-dot'
+    ];
+    
+    // Simulate pattern detection - replace with actual model inference
+    const detectedPatterns: PatternInfo[] = [];
+    
+    // For demo purposes
+    if (Math.random() > 0.7) {
+      detectedPatterns.push({
+        type: patterns[Math.floor(Math.random() * patterns.length)],
+        confidence: Math.random() * 0.3 + 0.7,
+      });
+    }
+    
+    tensor.dispose();
+    return detectedPatterns;
+  }
+
+  private async detectBrand(image: HTMLImageElement): Promise<BrandInfo | undefined> {
+    if (!this.brandDetectionModel) return undefined;
+    
+    // Prepare image for brand detection
+    const tensor = tf.browser.fromPixels(image)
+      .resizeNearestNeighbor([416, 416])
+      .expandDims()
+      .div(255.0);
+    
+    // Run brand detection model
+    const predictions = await this.brandDetectionModel.executeAsync(tensor) as tf.Tensor[];
+    
+    // Process predictions
+    const brands = ['Nike', 'Adidas', 'Zara', 'H&M', 'Uniqlo', 'Gap', 'Levi\'s'];
+    
+    // Simulate brand detection - replace with actual model output processing
+    const hasBrand = Math.random() > 0.7;
+    
+    tensor.dispose();
+    predictions.forEach(p => p.dispose());
+    
+    if (hasBrand) {
+      return {
+        name: brands[Math.floor(Math.random() * brands.length)],
+        confidence: Math.random() * 0.3 + 0.7,
+      };
+    }
+    
+    return undefined;
+  }
+
+  private async extractAttributes(image: HTMLImageElement): Promise<ClothingAttributes> {
+    // Extract clothing-specific attributes
+    // In production, use specialized models for each attribute
+    
+    const attributes: ClothingAttributes = {};
+    
+    // Simulate attribute detection
+    if (Math.random() > 0.5) {
+      attributes.sleeve = ['short', 'long', 'sleeveless'][Math.floor(Math.random() * 3)] as any;
+    }
+    
+    if (Math.random() > 0.5) {
+      attributes.fit = ['slim', 'regular', 'loose', 'oversized'][Math.floor(Math.random() * 4)] as any;
+    }
+    
+    return attributes;
+  }
+
+  private generateTags(analysis: any): string[] {
+    const tags = new Set<string>();
+    
+    // Add category and subcategory
+    tags.add(analysis.category);
+    if (analysis.category.subcategory) {
+      tags.add(analysis.category.subcategory);
+    }
+    
+    // Add color tags
+    analysis.colors.forEach((color: ColorInfo) => {
+      if (color.percentage > 20) {
+        tags.add(color.name.toLowerCase());
+      }
+    });
+    
+    // Add pattern tags
+    analysis.patterns.forEach((pattern: PatternInfo) => {
+      if (pattern.confidence > 0.7) {
+        tags.add(pattern.type);
+      }
+    });
+    
+    // Add brand tag
+    if (analysis.brand && analysis.brand.confidence > 0.8) {
+      tags.add(analysis.brand.name.toLowerCase());
+    }
+    
+    // Add attribute tags
+    Object.values(analysis.attributes).forEach(attr => {
+      if (typeof attr === 'string') {
+        tags.add(attr);
+      }
+    });
+    
+    return Array.from(tags);
+  }
+
+  private fileToImage(file: File): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async findSimilarItems(
+    imageAnalysis: ImageAnalysis,
+    userItems: ClothingItem[]
+  ): Promise<ClothingItem[]> {
+    // Create feature vectors for comparison
+    const targetFeatures = this.createFeatureVector(imageAnalysis);
+    
+    // Score each item in user's closet
+    const scoredItems = userItems.map(item => {
+      const itemFeatures = this.createItemFeatureVector(item);
+      const similarity = this.cosineSimilarity(targetFeatures, itemFeatures);
+      
+      return { item, similarity };
+    });
+    
+    // Return top similar items
+    return scoredItems
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 10)
+      .map(({ item }) => item);
+  }
+
+  private createFeatureVector(analysis: ImageAnalysis): number[] {
+    const vector: number[] = [];
+    
+    // Category encoding (one-hot)
+    const categories = ['tops', 'bottoms', 'dresses', 'outerwear', 'shoes', 'accessories'];
+    categories.forEach(cat => {
+      vector.push(cat === analysis.category ? 1 : 0);
+    });
+    
+    // Color features (RGB values of primary color)
+    const primaryColor = analysis.colors.find(c => c.isPrimary);
+    if (primaryColor) {
+      const rgb = this.hexToRgb(primaryColor.hex);
+      vector.push(rgb.r / 255, rgb.g / 255, rgb.b / 255);
+    } else {
+      vector.push(0, 0, 0);
+    }
+    
+    // Pattern features
+    const patterns = ['solid', 'striped', 'checkered', 'floral'];
+    patterns.forEach(pattern => {
+      const hasPattern = analysis.patterns.some(p => p.type === pattern);
+      vector.push(hasPattern ? 1 : 0);
+    });
+    
+    return vector;
+  }
+
+  private hexToRgb(hex: string): { r: number; g: number; b: number } {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : { r: 0, g: 0, b: 0 };
+  }
+
+  private createItemFeatureVector(item: ClothingItem): number[] {
+    // Similar to createFeatureVector but for existing items
+    const vector: number[] = [];
+    
+    // Category encoding
+    const categories = ['tops', 'bottoms', 'dresses', 'outerwear', 'shoes', 'accessories'];
+    categories.forEach(cat => {
+      vector.push(cat === item.category ? 1 : 0);
+    });
+    
+    // Color features
+    const primaryColor = item.color.find(c => c.isPrimary) || item.color[0];
+    if (primaryColor) {
+      const rgb = this.hexToRgb(primaryColor.hex);
+      vector.push(rgb.r / 255, rgb.g / 255, rgb.b / 255);
+    } else {
+      vector.push(0, 0, 0);
+    }
+    
+    // Pattern features (from tags)
+    const patterns = ['solid', 'striped', 'checkered', 'floral'];
+    patterns.forEach(pattern => {
+      const hasPattern = item.tags.includes(pattern);
+      vector.push(hasPattern ? 1 : 0);
+    });
+    
+    return vector;
+  }
+
+  private cosineSimilarity(a: number[], b: number[]): number {
+    const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
+    const normA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+    const normB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+    
+    return dotProduct / (normA * normB);
+  }
+}
+
+// ===== VIRTUAL TRY-ON =====
+// src/features/ai/services/virtualTryOnService.ts
+import * as THREE from 'three';
+import * as BABYLON from '@babylonjs/core';
+import '@babylonjs/loaders';
+import { FaceMesh } from '@mediapipe/face_mesh';
+import { Pose } from '@mediapipe/pose';
+
+interface BodyMeasurements {
+  height: number;
+  chest: number;
+  waist: number;
+  hips: number;
+  shoulderWidth: number;
+  armLength: number;
+  inseam: number;
+}
+
+interface FitPrediction {
+  overallFit: 'too-small' | 'perfect' | 'too-large';
+  areas: {
+    chest?: 'tight' | 'perfect' | 'loose';
+    waist?: 'tight' | 'perfect' | 'loose';
+    hips?: 'tight' | 'perfect' | 'loose';
+    length?: 'short' | 'perfect' | 'long';
+    shoulders?: 'narrow' | 'perfect' | 'wide';
+  };
+  sizeRecommendation: string;
+  confidence: number;
+  fitScore: number;
+  notes: string[];
+}
+
+export class VirtualTryOnService {
+  private scene: BABYLON.Scene | null = null;
+  private engine: BABYLON.Engine | null = null;
+  private camera: BABYLON.UniversalCamera | null = null;
+  private faceMesh: FaceMesh | null = null;
+  private pose: Pose | null = null;
+  private userAvatar: BABYLON.Mesh | null = null;
+
+  async initialize(canvas: HTMLCanvasElement) {
+    // Initialize Babylon.js
+    this.engine = new BABYLON.Engine(canvas, true);
+    this.scene = new BABYLON.Scene(this.engine);
+    
+    // Setup camera
+    this.camera = new BABYLON.UniversalCamera(
+      'camera',
+      new BABYLON.Vector3(0, 1.6, -3),
+      this.scene
+    );
+    this.camera.setTarget(BABYLON.Vector3.Zero());
+    
+    // Setup lighting
+    const light = new BABYLON.HemisphericLight(
+      'light',
+      new BABYLON.Vector3(0, 1, 0),
+      this.scene
+    );
+    light.intensity = 0.7;
+    
+    // Initialize MediaPipe for body tracking
+    this.faceMesh = new FaceMesh({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+    });
+    
+    this.pose = new Pose({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
+    });
+    
+    await this.loadUserAvatar();
+    
+    // Start render loop
+    this.engine.runRenderLoop(() => {
+      this.scene?.render();
+    });
+  }
+
+  private async loadUserAvatar() {
+    // Load or create user avatar based on measurements
+    const measurements = await this.getUserMeasurements();
+    
+    // Create parametric human model
+    this.userAvatar = this.createParametricHuman(measurements);
+  }
+
+  private createParametricHuman(measurements: BodyMeasurements): BABYLON.Mesh {
+    // Create base human mesh
+    const human = BABYLON.MeshBuilder.CreateCylinder('human', {
+      height: measurements.height / 100, // Convert cm to meters
+      diameterTop: measurements.shoulderWidth / 100,
+      diameterBottom: measurements.hips / 100,
+    }, this.scene);
+    
+    // Add body parts
+    this.addBodyPart('chest', measurements.chest / 100, 1.4);
+    this.addBodyPart('waist', measurements.waist / 100, 1.0);
+    this.addBodyPart('hips', measurements.hips / 100, 0.8);
+    
+    return human;
+  }
+
+  private addBodyPart(name: string, diameter: number, height: number) {
+    const part = BABYLON.MeshBuilder.CreateCylinder(name, {
+      height: 0.3,
+      diameter: diameter,
+    }, this.scene);
+    part.position.y = height;
+    part.parent = this.userAvatar;
+  }
+
+  async tryOnClothing(
+    clothingItem: ClothingItem,
+    userImage?: File
+  ): Promise<HTMLCanvasElement> {
+    // Load 3D model of clothing item
+    const clothingMesh = await this.loadClothingModel(clothingItem);
+    
+    // Apply clothing to avatar
+    this.applyClothingToAvatar(clothingMesh, clothingItem);
+    
+    // If user image provided, apply pose
+    if (userImage) {
+      await this.applyUserPose(userImage);
+    }
+    
+    // Render and return canvas
+    return this.renderToCanvas();
+  }
+
+  private async loadClothingModel(item: ClothingItem): Promise<BABYLON.Mesh> {
+    // In production, load actual 3D models from CDN
+    // For demo, create procedural clothing
+    
+    let clothing: BABYLON.Mesh;
+    
+    switch (item.category) {
+      case 'tops':
+        clothing = this.createShirt(item);
+        break;
+      case 'bottoms':
+        clothing = this.createPants(item);
+        break;
+      case 'dresses':
+        clothing = this.createDress(item);
+        break;
+      default:
+        clothing = BABYLON.MeshBuilder.CreateBox('clothing', {}, this.scene);
+    }
+    
+    // Apply textures and colors
+    const material = new BABYLON.StandardMaterial('clothingMat', this.scene);
+    const primaryColor = item.color.find(c => c.isPrimary) || item.color[0];
+    if (primaryColor) {
+      const rgb = this.hexToRgb(primaryColor.hex);
+      material.diffuseColor = new BABYLON.Color3(rgb.r / 255, rgb.g / 255, rgb.b / 255);
+    }
+    clothing.material = material;
+    
+    return clothing;
+  }
+
+  private createShirt(item: ClothingItem): BABYLON.Mesh {
+    const shirt = BABYLON.MeshBuilder.CreateCylinder('shirt', {
+      height: 0.7,
+      diameterTop: 0.5,
+      diameterBottom: 0.45,
+    }, this.scene);
+    shirt.position.y = 1.3;
+    
+    // Add sleeves
+    const sleeveLeft = BABYLON.MeshBuilder.CreateCylinder('sleeveL', {
+      height: 0.5,
+      diameter: 0.15,
+    }, this.scene);
+    sleeveLeft.rotation.z = Math.PI / 4;
+    sleeveLeft.position = new BABYLON.Vector3(-0.3, 1.4, 0);
+    sleeveLeft.parent = shirt;
+    
+    const sleeveRight = sleeveLeft.clone('sleeveR');
+    sleeveRight.position.x = 0.3;
+    sleeveRight.rotation.z = -Math.PI / 4;
+    
+    return shirt;
+  }
+
+  private createPants(item: ClothingItem): BABYLON.Mesh {
+    const pants = BABYLON.MeshBuilder.CreateCylinder('pants', {
+      height: 1.0,
+      diameterTop: 0.4,
+      diameterBottom: 0.3,
+    }, this.scene);
+    pants.position.y = 0.5;
+    
+    return pants;
+  }
+
+  private createDress(item: ClothingItem): BABYLON.Mesh {
+    const dress = BABYLON.MeshBuilder.CreateCylinder('dress', {
+      height: 1.2,
+      diameterTop: 0.45,
+      diameterBottom: 0.6,
+    }, this.scene);
+    dress.position.y = 1.0;
+    
+    return dress;
+  }
+
+  private applyClothingToAvatar(clothing: BABYLON.Mesh, item: ClothingItem) {
+    // Parent clothing to avatar
+    clothing.parent = this.userAvatar;
+    
+    // Adjust based on size
+    const sizeScale = this.getSizeScale(item.size || 'M');
+    clothing.scaling = new BABYLON.Vector3(sizeScale, 1, sizeScale);
+  }
+
+  private getSizeScale(size: string): number {
+    const scales: Record<string, number> = {
+      'XS': 0.9,
+      'S': 0.95,
+      'M': 1.0,
+      'L': 1.05,
+      'XL': 1.1,
+      'XXL': 1.15,
+    };
+    return scales[size] || 1.0;
+  }
+
+  private async applyUserPose(image: File) {
+    const img = await this.fileToImage(image);
+    
+    // Detect pose
+    const results = await this.pose!.send({ image: img });
+    
+    if (results.poseLandmarks) {
+      // Apply pose to avatar
+      this.updateAvatarPose(results.poseLandmarks);
+    }
+  }
+
+  private updateAvatarPose(landmarks: any[]) {
+    // Map MediaPipe landmarks to avatar bones
+    // This is simplified - real implementation would use proper rigging
+    
+    const shoulderLeft = landmarks[11];
+    const shoulderRight = landmarks[12];
+    const hipLeft = landmarks[23];
+    const hipRight = landmarks[24];
+    
+    // Calculate body angle
+    const shoulderAngle = Math.atan2(
+      shoulderRight.y - shoulderLeft.y,
+      shoulderRight.x - shoulderLeft.x
+    );
+    
+    if (this.userAvatar) {
+      this.userAvatar.rotation.y = shoulderAngle;
+    }
+  }
+
+  private renderToCanvas(): HTMLCanvasElement {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    
+    // Render scene to canvas
+    BABYLON.Tools.CreateScreenshotUsingRenderTarget(
+      this.engine!,
+      this.camera!,
+      { width: 512, height: 512 },
+      (data) => {
+        const img = new Image();
+        img.onload = () => {
+          const ctx = canvas.getContext('2d')!;
+          ctx.drawImage(img, 0, 0);
+        };
+        img.src = data;
+      }
+    );
+    
+    return canvas;
+  }
+
+  async predictFit(
+    item: ClothingItem,
+    userMeasurements: BodyMeasurements
+  ): Promise<FitPrediction> {
+    // Load size chart for the item/brand
+    const sizeChart = await this.loadSizeChart(item.brand || 'generic');
+    
+    // Compare measurements
+    const prediction: FitPrediction = {
+      overallFit: 'perfect',
+      areas: {},
+      sizeRecommendation: item.size || 'M',
+      confidence: 0.85,
+      fitScore: 0,
+      notes: [],
+    };
+    
+    // Analyze each measurement
+    const measurements = [
+      { area: 'chest', user: userMeasurements.chest, item: sizeChart[item.size || 'M']?.chest },
+      { area: 'waist', user: userMeasurements.waist, item: sizeChart[item.size || 'M']?.waist },
+      { area: 'hips', user: userMeasurements.hips, item: sizeChart[item.size || 'M']?.hips },
+    ];
+    
+    let totalScore = 0;
+    measurements.forEach(({ area, user, item }) => {
+      if (!item) return;
+      
+      const difference = (user - item) / item;
+      let fit: 'tight' | 'perfect' | 'loose';
+      let score: number;
+      
+      if (difference < -0.1) {
+        fit = 'tight';
+        score = Math.max(0, 1 + difference * 10);
+        prediction.notes.push(`${area} might feel tight`);
+      } else if (difference > 0.1) {
+        fit = 'loose';
+        score = Math.max(0, 1 - difference * 10);
+        prediction.notes.push(`${area} might feel loose`);
+      } else {
+        fit = 'perfect';
+        score = 1;
+      }
+      
+      prediction.areas[area as keyof typeof prediction.areas] = fit;
+      totalScore += score;
+    });
+    
+    prediction.fitScore = totalScore / measurements.length;
+    
+    // Determine overall fit
+    if (prediction.fitScore < 0.6) {
+      prediction.overallFit = 'too-small';
+      prediction.sizeRecommendation = this.getNextSize(item.size || 'M', 1);
+    } else if (prediction.fitScore < 0.8) {
+      prediction.overallFit = 'too-large';
+      prediction.sizeRecommendation = this.getNextSize(item.size || 'M', -1);
+    }
+    
+    // ML-based fit prediction
+    const mlPrediction = await this.runFitPredictionModel(item, userMeasurements);
+    prediction.confidence = mlPrediction.confidence;
+    
+    return prediction;
+  }
+
+  private async loadSizeChart(brand: string): Promise<Record<string, any>> {
+    // In production, load from database
+    const genericChart = {
+      'XS': { chest: 81, waist: 61, hips: 86 },
+      'S': { chest: 86, waist: 66, hips: 91 },
+      'M': { chest: 91, waist: 71, hips: 96 },
+      'L': { chest: 96, waist: 76, hips: 101 },
+      'XL': { chest: 101, waist: 81, hips: 106 },
+    };
+    
+    return genericChart;
+  }
+
+  private getNextSize(currentSize: string, direction: number): string {
+    const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+    const currentIndex = sizes.indexOf(currentSize);
+    const newIndex = Math.max(0, Math.min(sizes.length - 1, currentIndex + direction));
+    return sizes[newIndex];
+  }
+
+  private async runFitPredictionModel(
+    item: ClothingItem,
+    measurements: BodyMeasurements
+  ): Promise<{ confidence: number }> {
+    // Prepare features
+    const features = [
+      measurements.height / 200, // Normalize
+      measurements.chest / 150,
+      measurements.waist / 150,
+      measurements.hips / 150,
+      // Add more features like fabric stretch, style, etc.
+    ];
+    
+    // In production, run actual ML model
+    // For demo, simulate confidence based on measurements
+    const variance = Math.random() * 0.2;
+    const confidence = Math.min(0.95, 0.75 + variance);
+    
+    return { confidence };
+  }
+
+  private hexToRgb(hex: string): { r: number; g: number; b: number } {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : { r: 0, g: 0, b: 0 };
+  }
+
+  private fileToImage(file: File): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  private async getUserMeasurements(): Promise<BodyMeasurements> {
+    // In production, load from user profile
+    return {
+      height: 170,
+      chest: 90,
+      waist: 75,
+      hips: 95,
+      shoulderWidth: 45,
+      armLength: 60,
+      inseam: 80,
+    };
+  }
+
+  dispose() {
+    this.scene?.dispose();
+    this.engine?.dispose();
+  }
+}
+
+// ===== REACT COMPONENTS =====
+// src/features/ai/components/OutfitRecommendations/OutfitRecommendations.tsx
+import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import { Loading } from '@/shared/components/feedback/Loading';
+import { OutfitRecommendationService } from '../../services/outfitRecommendationService';
+import { useWeather } from '@/features/outfits/hooks/useWeather';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import type { OutfitRecommendation } from '../../services/outfitRecommendationService';
+
+export const OutfitRecommendations: React.FC = () => {
+  const user = useAuthStore(state => state.user);
+  const { currentWeather } = useWeather();
+  const [selectedOccasion, setSelectedOccasion] = useState('casual');
+  
+  const { data: recommendations, isLoading, refetch } = useQuery({
+    queryKey: ['outfit-recommendations', user?.id, selectedOccasion, currentWeather],
+    queryFn: async () => {
+      const service = new OutfitRecommendationService(AIService.getInstance());
+      return service.generateRecommendations(
+        user!.id,
+        selectedOccasion,
+        currentWeather
+      );
+    },
+    enabled: !!user,
+  });
+
+  const occasions = ['casual', 'work', 'formal', 'party', 'sport', 'date'];
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold mb-4">AI Outfit Recommendations</h2>
+        
+        <div className="flex space-x-2 mb-6">
+          {occasions.map(occasion => (
+            <Button
+              key={occasion}
+              variant={selectedOccasion === occasion ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => setSelectedOccasion(occasion)}
+            >
+              {occasion.charAt(0).toUpperCase() + occasion.slice(1)}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-12">
+          <Loading size="lg" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {recommendations?.map((rec) => (
+            <RecommendationCard key={rec.id} recommendation={rec} />
+          ))}
+        </div>
+      )}
+
+      {currentWeather && (
+        <Card variant="outlined" padding="md">
+          <h3 className="font-semibold mb-2">Weather Consideration</h3>
+          <p className="text-sm text-gray-600">
+            {currentWeather.temp.current}°C, {currentWeather.condition}
+          </p>
+        </Card>
+
+      {fitPrediction && (
+        <Card variant="outlined" padding="lg">
+          <h3 className="text-lg font-semibold mb-4">AI Fit Analysis</h3>
+          
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium">Overall Fit Score</span>
+              <span className="text-2xl font-bold">
+                {Math.round(fitPrediction.fitScore * 100)}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-3">
+              <div
+                className={`h-3 rounded-full transition-all ${
+                  fitPrediction.fitScore > 0.8 ? 'bg-green-500' :
+                  fitPrediction.fitScore > 0.6 ? 'bg-yellow-500' : 'bg-red-500'
+                }`}
+                style={{ width: `${fitPrediction.fitScore * 100}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3 mb-6">
+            <h4 className="font-medium">Fit by Area</h4>
+            {Object.entries(fitPrediction.areas).map(([area, fit]) => (
+              <div key={area} className="flex items-center justify-between">
+                <span className="text-sm capitalize">{area}</span>
+                <span className={`
+                  px-3 py-1 rounded-full text-sm
+                  ${fit === 'perfect' ? 'bg-green-100 text-green-800' :
+                    fit === 'tight' ? 'bg-red-100 text-red-800' :
+                    'bg-yellow-100 text-yellow-800'}
+                `}>
+                  {fit}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mb-6">
+            <h4 className="font-medium mb-2">Size Recommendation</h4>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <p className="text-lg font-semibold">
+                Size {fitPrediction.sizeRecommendation}
+              </p>
+              <p className="text-sm text-gray-600 mt-1">
+                Based on your measurements and this item's fit
+              </p>
+            </div>
+          </div>
+
+          {fitPrediction.notes.length > 0 && (
+            <div>
+              <h4 className="font-medium mb-2">Fit Notes</h4>
+              <ul className="space-y-1">
+                {fitPrediction.notes.map((note, index) => (
+                  <li key={index} className="text-sm text-gray-600">
+                    • {note}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="mt-4 pt-4 border-t">
+            <p className="text-xs text-gray-500">
+              AI confidence: {Math.round(fitPrediction.confidence * 100)}%
+            </p>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+};
+
+// ===== AI HOOKS =====
+// src/features/ai/hooks/useAIRecommendations.ts
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { OutfitRecommendationService } from '../services/outfitRecommendationService';
+import { AIService } from '@/shared/services/ai/aiService';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { useWeather } from '@/features/outfits/hooks/useWeather';
+
+export function useAIRecommendations(occasion: string = 'casual') {
+  const user = useAuthStore(state => state.user);
+  const { currentWeather } = useWeather();
+  const queryClient = useQueryClient();
+
+  const recommendationService = new OutfitRecommendationService(
+    AIService.getInstance({
+      apiKey: import.meta.env.VITE_AI_API_KEY,
+      modelEndpoints: {
+        styleMatching: '/api/ai/style-matching',
+        imageRecognition: '/api/ai/image-recognition',
+        colorAnalysis: '/api/ai/color-analysis',
+        sizeRecommendation: '/api/ai/size-recommendation',
+      },
+    })
+  );
+
+  const { data: recommendations, isLoading, error } = useQuery({
+    queryKey: ['ai-recommendations', user?.id, occasion, currentWeather],
+    queryFn: () => recommendationService.generateRecommendations(
+      user!.id,
+      occasion,
+      currentWeather
+    ),
+    enabled: !!user,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  const saveRecommendation = useMutation({
+    mutationFn: async (recommendationId: string) => {
+      // Save recommendation as outfit
+      const recommendation = recommendations?.find(r => r.id === recommendationId);
+      if (!recommendation) throw new Error('Recommendation not found');
+
+      return apiClient.post('/outfits', {
+        name: `AI Outfit - ${occasion}`,
+        items: recommendation.items.map(item => ({
+          itemId: item.id,
+          category: item.category,
+        })),
+        occasions: [occasion],
+        seasons: recommendation.weather ? ['all-season'] : [],
+        aiGenerated: true,
+        aiScore: recommendation.score,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['outfits'] });
+      toast.show({ type: 'success', message: 'Outfit saved!' });
+    },
+  });
+
+  const provideFeedback = useMutation({
+    mutationFn: async ({ recommendationId, feedback }: {
+      recommendationId: string;
+      feedback: 'like' | 'dislike';
+    }) => {
+      // Send feedback to improve AI
+      return apiClient.post('/api/ai/feedback', {
+        userId: user?.id,
+        recommendationId,
+        feedback,
+        context: { occasion, weather: currentWeather },
+      });
+    },
+  });
+
+  return {
+    recommendations,
+    isLoading,
+    error,
+    saveRecommendation: saveRecommendation.mutate,
+    provideFeedback: provideFeedback.mutate,
+  };
+}
+
+// src/features/ai/hooks/useImageAnalysis.ts
+import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { ImageRecognitionService } from '../services/imageRecognitionService';
+import { closetApi } from '@/features/closet/api/closet.api';
+import { toast } from '@/shared/components/feedback/Toast';
+
+export function useImageAnalysis() {
+  const [service] = useState(() => new ImageRecognitionService());
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  const initialize = async () => {
+    if (!isInitialized) {
+      await service.initialize();
+      setIsInitialized(true);
+    }
+  };
+
+  const analyzeImage = useMutation({
+    mutationFn: async (file: File) => {
+      await initialize();
+      return service.analyzeImage(file);
+    },
+  });
+
+  const createItemFromAnalysis = useMutation({
+    mutationFn: async ({ analysis, file }: {
+      analysis: any;
+      file: File;
+    }) => {
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('name', `${analysis.category} - ${analysis.brand?.name || 'Unknown'}`);
+      formData.append('category', analysis.category);
+      formData.append('brand', analysis.brand?.name || '');
+      formData.append('tags', JSON.stringify(analysis.tags));
+      
+      // Add colors
+      analysis.colors.forEach((color: any, index: number) => {
+        formData.append(`colors[${index}][hex]`, color.hex);
+        formData.append(`colors[${index}][name]`, color.name);
+        formData.append(`colors[${index}][isPrimary]`, String(color.isPrimary));
+      });
+
+      return closetApi.createItem(formData);
+    },
+    onSuccess: () => {
+      toast.show({ type: 'success', message: 'Item added to closet!' });
+    },
+  });
+
+  const findSimilarItems = async (analysis: any, userItems: any[]) => {
+    await initialize();
+    return service.findSimilarItems(analysis, userItems);
+  };
+
+  return {
+    analyzeImage: analyzeImage.mutateAsync,
+    createItemFromAnalysis: createItemFromAnalysis.mutate,
+    findSimilarItems,
+    isAnalyzing: analyzeImage.isPending,
+    analysis: analyzeImage.data,
+  };
+}
+
+// src/features/ai/hooks/useVirtualTryOn.ts
+import { useState, useEffect } from 'react';
+import { VirtualTryOnService } from '../services/virtualTryOnService';
+import type { ClothingItem } from '@/features/closet/types';
+import type { BodyMeasurements } from '../services/virtualTryOnService';
+
+export function useVirtualTryOn(canvas: HTMLCanvasElement | null) {
+  const [service, setService] = useState<VirtualTryOnService | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!canvas || isInitialized) return;
+
+    const init = async () => {
+      const tryOnService = new VirtualTryOnService();
+      await tryOnService.initialize(canvas);
+      setService(tryOnService);
+      setIsInitialized(true);
+    };
+
+    init();
+
+    return () => {
+      service?.dispose();
+    };
+  }, [canvas]);
+
+  const tryOn = async (item: ClothingItem, userImage?: File) => {
+    if (!service) throw new Error('Service not initialized');
+
+    setIsLoading(true);
+    try {
+      const result = await service.tryOnClothing(item, userImage);
+      return result;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const predictFit = async (
+    item: ClothingItem,
+    measurements: BodyMeasurements
+  ) => {
+    if (!service) throw new Error('Service not initialized');
+
+    return service.predictFit(item, measurements);
+  };
+
+  return {
+    tryOn,
+    predictFit,
+    isLoading,
+    isInitialized,
+  };
+}
+
+// ===== AI STORE =====
+// src/features/ai/stores/ai.store.ts
+import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+
+interface AIPreferences {
+  stylePersonality: 'classic' | 'trendy' | 'casual' | 'formal' | 'eclectic';
+  preferredColors: string[];
+  avoidColors: string[];
+  preferredBrands: string[];
+  preferredFit: 'tight' | 'regular' | 'loose';
+  sustainabilityPreference: boolean;
+  budgetRange: { min: number; max: number };
+}
+
+interface AIState {
+  // User preferences
+  preferences: AIPreferences;
+  
+  // AI model states
+  modelsLoaded: Set<string>;
+  isInitializing: boolean;
+  
+  // Recommendation history
+  recommendationHistory: Array<{
+    id: string;
+    timestamp: string;
+    occasion: string;
+    score: number;
+    accepted: boolean;
+  }>;
+  
+  // Actions
+  updatePreferences: (preferences: Partial<AIPreferences>) => void;
+  setModelLoaded: (modelName: string) => void;
+  addRecommendationToHistory: (recommendation: any) => void;
+  clearHistory: () => void;
+}
+
+export const useAIStore = create<AIState>()(
+  devtools(
+    immer((set) => ({
+      preferences: {
+        stylePersonality: 'casual',
+        preferredColors: [],
+        avoidColors: [],
+        preferredBrands: [],
+        preferredFit: 'regular',
+        sustainabilityPreference: false,
+        budgetRange: { min: 0, max: 1000 },
+      },
+      
+      modelsLoaded: new Set(),
+      isInitializing: false,
+      recommendationHistory: [],
+      
+      updatePreferences: (newPreferences) =>
+        set((state) => {
+          Object.assign(state.preferences, newPreferences);
+        }),
+      
+      setModelLoaded: (modelName) =>
+        set((state) => {
+          state.modelsLoaded.add(modelName);
+        }),
+      
+      addRecommendationToHistory: (recommendation) =>
+        set((state) => {
+          state.recommendationHistory.unshift({
+            id: recommendation.id,
+            timestamp: new Date().toISOString(),
+            occasion: recommendation.occasion,
+            score: recommendation.score,
+            accepted: false,
+          });
+          
+          // Keep only last 50 recommendations
+          if (state.recommendationHistory.length > 50) {
+            state.recommendationHistory = state.recommendationHistory.slice(0, 50);
+          }
+        }),
+      
+      clearHistory: () =>
+        set((state) => {
+          state.recommendationHistory = [];
+        }),
+    }))
+  )
+);
+
+// ===== AI SETTINGS PAGE =====
+// src/features/ai/pages/AISettingsPage.tsx
+import React from 'react';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import { Select } from '@/shared/components/ui/Select';
+import { TagInput } from '@/shared/components/ui/TagInput';
+import { RangeSlider } from '@/shared/components/ui/RangeSlider';
+import { useAIStore } from '../stores/ai.store';
+import { toast } from '@/shared/components/feedback/Toast';
+
+const AISettingsPage: React.FC = () => {
+  const { preferences, updatePreferences } = useAIStore();
+
+  const handleSave = () => {
+    // In production, save to backend
+    toast.show({ type: 'success', message: 'AI preferences saved!' });
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-8">AI Style Preferences</h1>
+
+      <div className="max-w-2xl space-y-6">
+        <Card variant="outlined" padding="lg">
+          <h2 className="text-xl font-semibold mb-4">Style Personality</h2>
+          <p className="text-gray-600 mb-4">
+            Help our AI understand your personal style
+          </p>
+          
+          <Select
+            value={preferences.stylePersonality}
+            onChange={(value) => updatePreferences({ stylePersonality: value as any })}
+            options={[
+              { value: 'classic', label: 'Classic - Timeless and elegant' },
+              { value: 'trendy', label: 'Trendy - Fashion-forward and current' },
+              { value: 'casual', label: 'Casual - Comfortable and relaxed' },
+              { value: 'formal', label: 'Formal - Professional and polished' },
+              { value: 'eclectic', label: 'Eclectic - Mix of various styles' },
+            ]}
+          />
+        </Card>
+
+        <Card variant="outlined" padding="lg">
+          <h2 className="text-xl font-semibold mb-4">Color Preferences</h2>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Preferred Colors
+              </label>
+              <TagInput
+                value={preferences.preferredColors}
+                onChange={(colors) => updatePreferences({ preferredColors: colors })}
+                placeholder="Add colors you love..."
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Colors to Avoid
+              </label>
+              <TagInput
+                value={preferences.avoidColors}
+                onChange={(colors) => updatePreferences({ avoidColors: colors })}
+                placeholder="Add colors to avoid..."
+              />
+            </div>
+          </div>
+        </Card>
+
+        <Card variant="outlined" padding="lg">
+          <h2 className="text-xl font-semibold mb-4">Fit Preference</h2>
+          
+          <div className="space-x-2">
+            {['tight', 'regular', 'loose'].map((fit) => (
+              <Button
+                key={fit}
+                variant={preferences.preferredFit === fit ? 'primary' : 'ghost'}
+                onClick={() => updatePreferences({ preferredFit: fit as any })}
+              >
+                {fit.charAt(0).toUpperCase() + fit.slice(1)} Fit
+              </Button>
+            ))}
+          </div>
+        </Card>
+
+        <Card variant="outlined" padding="lg">
+          <h2 className="text-xl font-semibold mb-4">Budget Range</h2>
+          <p className="text-gray-600 mb-4">
+            Set your preferred price range for recommendations
+          </p>
+          
+          <RangeSlider
+            min={0}
+            max={1000}
+            step={10}
+            values={[preferences.budgetRange.min, preferences.budgetRange.max]}
+            onChange={([min, max]) => updatePreferences({
+              budgetRange: { min, max }
+            })}
+          />
+          
+          <div className="flex justify-between mt-2 text-sm text-gray-600">
+            <span>${preferences.budgetRange.min}</span>
+            <span>${preferences.budgetRange.max}+</span>
+          </div>
+        </Card>
+
+        <Card variant="outlined" padding="lg">
+          <h2 className="text-xl font-semibold mb-4">Sustainability</h2>
+          
+          <label className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              checked={preferences.sustainabilityPreference}
+              onChange={(e) => updatePreferences({
+                sustainabilityPreference: e.target.checked
+              })}
+              className="w-5 h-5 border-2 border-black rounded"
+            />
+            <span>Prioritize sustainable and eco-friendly options</span>
+          </label>
+        </Card>
+
+        <div className="flex justify-end space-x-4">
+          <Button variant="ghost">Reset to Defaults</Button>
+          <Button variant="primary" onClick={handleSave}>
+            Save Preferences
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AISettingsPage;
+
+// ===== INTEGRATION WITH MAIN APP =====
+// Update Router to include AI routes
+// src/app/Router.tsx (addition)
+const AISettingsPage = lazy(() => import('@/features/ai/pages/AISettingsPage'));
+const AIRecommendationsPage = lazy(() => import('@/features/ai/pages/AIRecommendationsPage'));
+
+// Add to routes:
+<Route path="ai">
+  <Route index element={<AIRecommendationsPage />} />
+  <Route path="settings" element={<AISettingsPage />} />
+</Route>
+
+// Update navigation to include AI features
+// src/shared/components/layout/Header/Header.tsx (addition)
+<Link to="/ai" className="hover:underline">
+  AI Assistant
+</Link>
+
+// Add AI initialization to main app
+// src/main.tsx (addition)
+import { AIService } from '@/shared/services/ai/aiService';
+
+// Initialize AI service
+AIService.getInstance({
+  apiKey: import.meta.env.VITE_AI_API_KEY,
+  modelEndpoints: {
+    styleMatching: '/api/ai/style-matching',
+    imageRecognition: '/api/ai/image-recognition',
+    colorAnalysis: '/api/ai/color-analysis',
+    sizeRecommendation: '/api/ai/size-recommendation',
+  },
+}).initialize();
+      )}
+    </div>
+  );
+};
+
+const RecommendationCard: React.FC<{ recommendation: OutfitRecommendation }> = ({
+  recommendation
+}) => {
+  return (
+    <Card variant="outlined" className="overflow-hidden">
+      <div className="grid grid-cols-2 gap-2 p-4">
+        {recommendation.items.slice(0, 4).map((item, index) => (
+          <div key={item.id} className="aspect-square relative">
+            <img
+              src={item.images[0]?.thumbnailUrl}
+              alt={item.name}
+              className="w-full h-full object-cover rounded"
+            />
+          </div>
+        ))}
+      </div>
+      
+      <div className="p-4 border-t">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold">Match Score</h3>
+          <span className="text-lg font-bold">{Math.round(recommendation.score * 100)}%</span>
+        </div>
+        
+        <div className="space-y-1 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-600">Color Harmony</span>
+            <span>{Math.round(recommendation.colorHarmonyScore * 100)}%</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600">Personal Style</span>
+            <span>{Math.round(recommendation.personalizedScore * 100)}%</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600">Trend Score</span>
+            <span>{Math.round(recommendation.trendScore * 100)}%</span>
+          </div>
+        </div>
+        
+        <div className="mt-3">
+          <h4 className="font-medium text-sm mb-1">Why this works:</h4>
+          <ul className="text-xs text-gray-600 space-y-1">
+            {recommendation.reasoning.slice(0, 3).map((reason, index) => (
+              <li key={index}>• {reason}</li>
+            ))}
+          </ul>
+        </div>
+        
+        <Button variant="primary" size="sm" className="w-full mt-4">
+          Try This Outfit
+        </Button>
+      </div>
+    </Card>
+  );
+};
+
+// src/features/ai/components/ImageAnalysis/ImageAnalysis.tsx
+import React, { useState, useCallback } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import { Loading } from '@/shared/components/feedback/Loading';
+import { ImageRecognitionService } from '../../services/imageRecognitionService';
+import { toast } from '@/shared/components/feedback/Toast';
+
+export const ImageAnalysis: React.FC = () => {
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<any>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (!file) return;
+
+    // Show preview
+    const preview = URL.createObjectURL(file);
+    setImagePreview(preview);
+
+    // Analyze image
+    setIsAnalyzing(true);
+    try {
+      const service = new ImageRecognitionService();
+      await service.initialize();
+      const result = await service.analyzeImage(file);
+      setAnalysis(result);
+      toast.show({ type: 'success', message: 'Image analyzed successfully!' });
+    } catch (error) {
+      toast.show({ type: 'error', message: 'Failed to analyze image' });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'image/*': ['.jpeg', '.jpg', '.png', '.webp']
+    },
+    maxFiles: 1,
+  });
+
+  return (
+    <div className="space-y-6">
+      <Card variant="outlined" padding="lg">
+        <h3 className="text-lg font-semibold mb-4">AI Image Analysis</h3>
+        
+        <div
+          {...getRootProps()}
+          className={`
+            border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
+            transition-colors
+            ${isDragActive ? 'border-black bg-gray-50' : 'border-gray-300 hover:border-gray-400'}
+          `}
+        >
+          <input {...getInputProps()} />
+          
+          {imagePreview ? (
+            <img
+              src={imagePreview}
+              alt="Preview"
+              className="max-h-64 mx-auto rounded"
+            />
+          ) : (
+            <div>
+              <span className="text-4xl">📷</span>
+              <p className="mt-2">
+                {isDragActive
+                  ? 'Drop the image here'
+                  : 'Drag & drop an image, or click to select'}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {isAnalyzing && (
+          <div className="mt-6 flex justify-center">
+            <Loading size="lg" />
+            <span className="ml-3">Analyzing image with AI...</span>
+          </div>
+        )}
+
+        {analysis && !isAnalyzing && (
+          <div className="mt-6 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <h4 className="font-medium mb-2">Category</h4>
+                <p className="text-lg">
+                  {analysis.category}
+                  {analysis.subcategory && ` - ${analysis.subcategory}`}
+                </p>
+                <p className="text-sm text-gray-600">
+                  Confidence: {Math.round(analysis.confidence * 100)}%
+                </p>
+              </div>
+
+              {analysis.brand && (
+                <div>
+                  <h4 className="font-medium mb-2">Brand</h4>
+                  <p className="text-lg">{analysis.brand.name}</p>
+                  <p className="text-sm text-gray-600">
+                    Confidence: {Math.round(analysis.brand.confidence * 100)}%
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h4 className="font-medium mb-2">Colors</h4>
+              <div className="flex space-x-2">
+                {analysis.colors.map((color: any, index: number) => (
+                  <div key={index} className="text-center">
+                    <div
+                      className="w-12 h-12 rounded border-2 border-black"
+                      style={{ backgroundColor: color.hex }}
+                    />
+                    <p className="text-xs mt-1">{color.name}</p>
+                    <p className="text-xs text-gray-600">{Math.round(color.percentage)}%</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {analysis.patterns.length > 0 && (
+              <div>
+                <h4 className="font-medium mb-2">Patterns</h4>
+                <div className="flex flex-wrap gap-2">
+                  {analysis.patterns.map((pattern: any, index: number) => (
+                    <span
+                      key={index}
+                      className="px-3 py-1 bg-gray-100 rounded-full text-sm"
+                    >
+                      {pattern.type}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <h4 className="font-medium mb-2">Suggested Tags</h4>
+              <div className="flex flex-wrap gap-2">
+                {analysis.tags.map((tag: string, index: number) => (
+                  <span
+                    key={index}
+                    className="px-3 py-1 bg-black text-white rounded-full text-sm"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <Button variant="primary" className="w-full">
+              Add to Closet with AI Tags
+            </Button>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+};
+
+// src/features/ai/components/VirtualTryOn/VirtualTryOn.tsx
+import React, { useRef, useEffect, useState } from 'react';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import { Select } from '@/shared/components/ui/Select';
+import { VirtualTryOnService } from '../../services/virtualTryOnService';
+import type { ClothingItem } from '@/features/closet/types';
+import type { FitPrediction } from '../../services/virtualTryOnService';
+
+interface VirtualTryOnProps {
+  item: ClothingItem;
+}
+
+export const VirtualTryOn: React.FC<VirtualTryOnProps> = ({ item }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [service, setService] = useState<VirtualTryOnService | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fitPrediction, setFitPrediction] = useState<FitPrediction | null>(null);
+  const [selectedSize, setSelectedSize] = useState(item.size || 'M');
+
+  useEffect(() => {
+    const initService = async () => {
+      if (!canvasRef.current) return;
+
+      const tryOnService = new VirtualTryOnService();
+      await tryOnService.initialize(canvasRef.current);
+      setService(tryOnService);
+      setIsLoading(false);
+
+      // Get initial fit prediction
+      const prediction = await tryOnService.predictFit(
+        { ...item, size: selectedSize },
+        await tryOnService.getUserMeasurements()
+      );
+      setFitPrediction(prediction);
+    };
+
+    initService();
+
+    return () => {
+      service?.dispose();
+    };
+  }, []);
+
+  const handleSizeChange = async (size: string) => {
+    setSelectedSize(size);
+    if (!service) return;
+
+    const prediction = await service.predictFit(
+      { ...item, size },
+      await service.getUserMeasurements()
+    );
+    setFitPrediction(prediction);
+  };
+
+  const handleTryOn = async () => {
+    if (!service) return;
+    
+    setIsLoading(true);
+    try {
+      await service.tryOnClothing({ ...item, size: selectedSize });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <Card variant="outlined" padding="lg">
+        <h3 className="text-lg font-semibold mb-4">Virtual Try-On</h3>
+        
+        <div className="relative bg-gray-100 rounded-lg overflow-hidden mb-4">
+          <canvas
+            ref={canvasRef}
+            width={512}
+            height={512}
+            className="w-full h-auto"
+          />
+          
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75">
+              <Loading size="lg" />
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Select Size
+            </label>
+            <Select
+              value={selectedSize}
+              onChange={handleSizeChange}
+              options={sizes.map(s => ({ value: s, label: s }))}
+            />
+          </div>
+
+          <Button
+            variant="primary"
+            className="w-full"
+            onClick={handleTryOn}
+            isLoading={isLoading}
+          >
+            Try On
+          </Button>
+
+          <Button variant="secondary" className="w-full">
+            Upload Your Photo
+          </Button>
+        </div>
+      </Car
