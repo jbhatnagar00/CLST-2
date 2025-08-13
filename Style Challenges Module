@@ -1,0 +1,1037 @@
+// src/features/challenges/api/challenges.api.ts
+import { apiClient } from '@/shared/services/api/ApiClient';
+import type { Challenge, Submission, Participant, ChallengeProgress } from '../types';
+import type { PaginatedResponse, PaginationParams } from '@/shared/types';
+
+export const challengesApi = {
+  // Challenges
+  getChallenges: async (params?: PaginationParams & {
+    status?: 'upcoming' | 'active' | 'completed';
+    category?: string;
+  }): Promise<PaginatedResponse<Challenge>> => {
+    return apiClient.get('/challenges', { params });
+  },
+
+  getChallenge: async (id: string): Promise<Challenge> => {
+    return apiClient.get(`/challenges/${id}`);
+  },
+
+  joinChallenge: async (challengeId: string): Promise<Participant> => {
+    return apiClient.post(`/challenges/${challengeId}/join`);
+  },
+
+  leaveChallenge: async (challengeId: string): Promise<void> => {
+    return apiClient.delete(`/challenges/${challengeId}/leave`);
+  },
+
+  // Submissions
+  createSubmission: async (challengeId: string, data: FormData): Promise<Submission> => {
+    return apiClient.post(`/challenges/${challengeId}/submissions`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  getSubmissions: async (
+    challengeId: string, 
+    params?: PaginationParams
+  ): Promise<PaginatedResponse<Submission>> => {
+    return apiClient.get(`/challenges/${challengeId}/submissions`, { params });
+  },
+
+  voteSubmission: async (submissionId: string): Promise<void> => {
+    return apiClient.post(`/submissions/${submissionId}/vote`);
+  },
+
+  unvoteSubmission: async (submissionId: string): Promise<void> => {
+    return apiClient.delete(`/submissions/${submissionId}/vote`);
+  },
+
+  // Progress
+  getChallengeProgress: async (challengeId: string): Promise<ChallengeProgress> => {
+    return apiClient.get(`/challenges/${challengeId}/progress`);
+  },
+
+  updateProgress: async (
+    challengeId: string, 
+    day: number, 
+    completed: boolean
+  ): Promise<void> => {
+    return apiClient.post(`/challenges/${challengeId}/progress`, { day, completed });
+  },
+
+  // Rewards
+  claimReward: async (challengeId: string): Promise<{ reward: any }> => {
+    return apiClient.post(`/challenges/${challengeId}/claim-reward`);
+  },
+
+  // Analytics
+  trackChallengeView: async (challengeId: string): Promise<void> => {
+    return apiClient.post(`/challenges/${challengeId}/view`);
+  },
+};
+
+// src/features/challenges/types/challenges.types.ts
+import type { BaseEntity, ID, User } from '@/shared/types';
+
+export interface Challenge extends BaseEntity {
+  title: string;
+  description: string;
+  rules: string[];
+  requirements: ChallengeRequirement[];
+  startDate: string;
+  endDate: string;
+  duration: number; // in days
+  category: ChallengeCategory;
+  difficulty: 'easy' | 'medium' | 'hard';
+  prizes: Prize[];
+  rewards: Reward[];
+  participants: Participant[];
+  submissions: Submission[];
+  status: 'upcoming' | 'active' | 'completed';
+  coverImage: string;
+  bannerImage?: string;
+  tags: string[];
+  maxParticipants?: number;
+  isJoined?: boolean;
+  progress?: ChallengeProgress;
+}
+
+export type ChallengeCategory = 
+  | '30-day-style'
+  | 'capsule-wardrobe'
+  | 'color-coordination'
+  | 'thrift-flip'
+  | 'seasonal'
+  | 'sustainable'
+  | 'brand-specific'
+  | 'decade-theme'
+  | 'budget-style'
+  | 'minimalist';
+
+export interface ChallengeRequirement {
+  id: string;
+  description: string;
+  type: 'daily' | 'weekly' | 'one-time';
+  points: number;
+}
+
+export interface Prize {
+  rank: number;
+  title: string;
+  description: string;
+  value?: number;
+  sponsor?: string;
+  image?: string;
+}
+
+export interface Reward {
+  id: string;
+  type: 'badge' | 'points' | 'discount' | 'item';
+  title: string;
+  description: string;
+  value: any;
+  requirement: 'completion' | 'participation' | 'winning';
+}
+
+export interface Participant extends BaseEntity {
+  userId: ID;
+  user: User;
+  challengeId: ID;
+  joinedAt: string;
+  completedDays: number;
+  totalPoints: number;
+  rank?: number;
+  hasSubmitted: boolean;
+  lastActivityAt: string;
+}
+
+export interface Submission extends BaseEntity {
+  challengeId: ID;
+  userId: ID;
+  user: User;
+  title: string;
+  description: string;
+  images: SubmissionImage[];
+  outfitItems: ID[];
+  votes: number;
+  hasVoted?: boolean;
+  comments: Comment[];
+  day?: number;
+  tags: string[];
+}
+
+export interface SubmissionImage {
+  id: ID;
+  url: string;
+  thumbnailUrl: string;
+  isPrimary: boolean;
+}
+
+export interface Comment extends BaseEntity {
+  userId: ID;
+  user: User;
+  text: string;
+  likes: number;
+  replies?: Comment[];
+}
+
+export interface ChallengeProgress {
+  challengeId: ID;
+  userId: ID;
+  startedAt: string;
+  completedDays: number[];
+  currentStreak: number;
+  longestStreak: number;
+  totalPoints: number;
+  achievements: Achievement[];
+  nextMilestone?: Milestone;
+  completionPercentage: number;
+}
+
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  unlockedAt: string;
+  points: number;
+}
+
+export interface Milestone {
+  day: number;
+  title: string;
+  reward: Reward;
+}
+
+// src/features/challenges/stores/challenges.store.ts
+import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+import type { Challenge, Submission, ChallengeProgress } from '../types';
+import { challengesApi } from '../api/challenges.api';
+import { useAnalytics } from '@/shared/hooks/useAnalytics';
+
+interface ChallengesState {
+  // State
+  challenges: Challenge[];
+  currentChallenge: Challenge | null;
+  submissions: Submission[];
+  userProgress: Map<string, ChallengeProgress>;
+  isLoading: boolean;
+  error: string | null;
+  
+  // Filters
+  activeFilter: 'all' | 'joined' | 'upcoming' | 'active' | 'completed';
+  categoryFilter: string | null;
+  
+  // Pagination
+  currentPage: number;
+  totalPages: number;
+
+  // Actions - Challenges
+  fetchChallenges: (page?: number) => Promise<void>;
+  fetchChallenge: (id: string) => Promise<void>;
+  joinChallenge: (challengeId: string) => Promise<void>;
+  leaveChallenge: (challengeId: string) => Promise<void>;
+  
+  // Actions - Submissions
+  fetchSubmissions: (challengeId: string, page?: number) => Promise<void>;
+  createSubmission: (challengeId: string, data: FormData) => Promise<void>;
+  voteSubmission: (submissionId: string) => Promise<void>;
+  
+  // Actions - Progress
+  updateProgress: (challengeId: string, day: number, completed: boolean) => Promise<void>;
+  fetchProgress: (challengeId: string) => Promise<void>;
+  
+  // Actions - Filters
+  setActiveFilter: (filter: ChallengesState['activeFilter']) => void;
+  setCategoryFilter: (category: string | null) => void;
+  
+  // Actions - Rewards
+  claimReward: (challengeId: string) => Promise<void>;
+}
+
+export const useChallengesStore = create<ChallengesState>()(
+  devtools(
+    immer((set, get) => ({
+      // Initial State
+      challenges: [],
+      currentChallenge: null,
+      submissions: [],
+      userProgress: new Map(),
+      isLoading: false,
+      error: null,
+      activeFilter: 'all',
+      categoryFilter: null,
+      currentPage: 1,
+      totalPages: 1,
+
+      // Challenge Actions
+      fetchChallenges: async (page = 1) => {
+        set((state) => {
+          state.isLoading = true;
+          state.error = null;
+          state.currentPage = page;
+        });
+
+        try {
+          const { activeFilter, categoryFilter } = get();
+          const params: any = { page, limit: 12 };
+          
+          if (activeFilter !== 'all' && activeFilter !== 'joined') {
+            params.status = activeFilter;
+          }
+          
+          if (categoryFilter) {
+            params.category = categoryFilter;
+          }
+
+          const response = await challengesApi.getChallenges(params);
+          
+          set((state) => {
+            state.challenges = response.data;
+            state.totalPages = response.meta.totalPages;
+            state.isLoading = false;
+          });
+        } catch (error: any) {
+          set((state) => {
+            state.error = error.message || 'Failed to fetch challenges';
+            state.isLoading = false;
+          });
+        }
+      },
+
+      fetchChallenge: async (id) => {
+        set((state) => {
+          state.isLoading = true;
+          state.error = null;
+        });
+
+        try {
+          const challenge = await challengesApi.getChallenge(id);
+          
+          set((state) => {
+            state.currentChallenge = challenge;
+            state.isLoading = false;
+          });
+
+          // Track view
+          challengesApi.trackChallengeView(id).catch(console.error);
+          
+          // Fetch progress if joined
+          if (challenge.isJoined) {
+            get().fetchProgress(id);
+          }
+        } catch (error: any) {
+          set((state) => {
+            state.error = error.message || 'Failed to fetch challenge';
+            state.isLoading = false;
+          });
+        }
+      },
+
+      joinChallenge: async (challengeId) => {
+        try {
+          await challengesApi.joinChallenge(challengeId);
+          
+          set((state) => {
+            const challenge = state.challenges.find(c => c.id === challengeId);
+            if (challenge) {
+              challenge.isJoined = true;
+              challenge.participants.length += 1;
+            }
+            if (state.currentChallenge?.id === challengeId) {
+              state.currentChallenge.isJoined = true;
+              state.currentChallenge.participants.length += 1;
+            }
+          });
+
+          // Track event
+          const { track } = useAnalytics();
+          track({
+            category: 'Challenge',
+            action: 'join',
+            label: challengeId,
+          });
+        } catch (error: any) {
+          throw error;
+        }
+      },
+
+      leaveChallenge: async (challengeId) => {
+        try {
+          await challengesApi.leaveChallenge(challengeId);
+          
+          set((state) => {
+            const challenge = state.challenges.find(c => c.id === challengeId);
+            if (challenge) {
+              challenge.isJoined = false;
+              challenge.participants.length -= 1;
+            }
+            if (state.currentChallenge?.id === challengeId) {
+              state.currentChallenge.isJoined = false;
+              state.currentChallenge.participants.length -= 1;
+            }
+            state.userProgress.delete(challengeId);
+          });
+        } catch (error: any) {
+          throw error;
+        }
+      },
+
+      // Submission Actions
+      fetchSubmissions: async (challengeId, page = 1) => {
+        set((state) => {
+          state.isLoading = true;
+        });
+
+        try {
+          const response = await challengesApi.getSubmissions(challengeId, { page, limit: 20 });
+          
+          set((state) => {
+            state.submissions = response.data;
+            state.isLoading = false;
+          });
+        } catch (error: any) {
+          set((state) => {
+            state.error = error.message || 'Failed to fetch submissions';
+            state.isLoading = false;
+          });
+        }
+      },
+
+      createSubmission: async (challengeId, data) => {
+        try {
+          const submission = await challengesApi.createSubmission(challengeId, data);
+          
+          set((state) => {
+            state.submissions.unshift(submission);
+            if (state.currentChallenge?.id === challengeId) {
+              state.currentChallenge.submissions.unshift(submission);
+            }
+          });
+
+          // Track event
+          const { track } = useAnalytics();
+          track({
+            category: 'Challenge',
+            action: 'submit',
+            label: challengeId,
+          });
+        } catch (error: any) {
+          throw error;
+        }
+      },
+
+      voteSubmission: async (submissionId) => {
+        try {
+          const submission = get().submissions.find(s => s.id === submissionId);
+          const wasVoted = submission?.hasVoted;
+          
+          if (wasVoted) {
+            await challengesApi.unvoteSubmission(submissionId);
+          } else {
+            await challengesApi.voteSubmission(submissionId);
+          }
+          
+          set((state) => {
+            const sub = state.submissions.find(s => s.id === submissionId);
+            if (sub) {
+              sub.hasVoted = !wasVoted;
+              sub.votes += wasVoted ? -1 : 1;
+            }
+          });
+        } catch (error: any) {
+          throw error;
+        }
+      },
+
+      // Progress Actions
+      updateProgress: async (challengeId, day, completed) => {
+        try {
+          await challengesApi.updateProgress(challengeId, day, completed);
+          
+          set((state) => {
+            const progress = state.userProgress.get(challengeId);
+            if (progress) {
+              if (completed && !progress.completedDays.includes(day)) {
+                progress.completedDays.push(day);
+                progress.completedDays.sort((a, b) => a - b);
+              } else if (!completed) {
+                progress.completedDays = progress.completedDays.filter(d => d !== day);
+              }
+              
+              // Update completion percentage
+              const challenge = state.currentChallenge;
+              if (challenge) {
+                progress.completionPercentage = 
+                  (progress.completedDays.length / challenge.duration) * 100;
+              }
+            }
+          });
+        } catch (error: any) {
+          throw error;
+        }
+      },
+
+      fetchProgress: async (challengeId) => {
+        try {
+          const progress = await challengesApi.getChallengeProgress(challengeId);
+          
+          set((state) => {
+            state.userProgress.set(challengeId, progress);
+          });
+        } catch (error: any) {
+          console.error('Failed to fetch progress:', error);
+        }
+      },
+
+      // Filter Actions
+      setActiveFilter: (filter) => {
+        set((state) => {
+          state.activeFilter = filter;
+        });
+        get().fetchChallenges(1);
+      },
+
+      setCategoryFilter: (category) => {
+        set((state) => {
+          state.categoryFilter = category;
+        });
+        get().fetchChallenges(1);
+      },
+
+      // Reward Actions
+      claimReward: async (challengeId) => {
+        try {
+          const { reward } = await challengesApi.claimReward(challengeId);
+          
+          // Handle reward based on type
+          console.log('Reward claimed:', reward);
+          
+          // Track event
+          const { track } = useAnalytics();
+          track({
+            category: 'Challenge',
+            action: 'claim_reward',
+            label: challengeId,
+            value: reward.value,
+          });
+        } catch (error: any) {
+          throw error;
+        }
+      },
+    }))
+  )
+);
+
+// src/features/challenges/components/ChallengeCard/ChallengeCard.tsx
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import { ProgressBar } from '@/shared/components/ui/ProgressBar';
+import { formatDate } from '@/shared/utils/helpers';
+import type { Challenge } from '../../types';
+
+interface ChallengeCardProps {
+  challenge: Challenge;
+  progress?: number;
+}
+
+export const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, progress }) => {
+  const getDifficultyColor = (difficulty: string) => {
+    switch (difficulty) {
+      case 'easy': return 'text-green-600';
+      case 'medium': return 'text-yellow-600';
+      case 'hard': return 'text-red-600';
+      default: return 'text-gray-600';
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'upcoming':
+        return <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">Upcoming</span>;
+      case 'active':
+        return <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Active</span>;
+      case 'completed':
+        return <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">Completed</span>;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Card variant="outlined" className="group hover:shadow-lg transition-all">
+      <Link to={`/challenges/${challenge.id}`}>
+        <div className="aspect-video relative overflow-hidden">
+          <img
+            src={challenge.coverImage}
+            alt={challenge.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+          
+          <div className="absolute top-2 left-2">
+            {getStatusBadge(challenge.status)}
+          </div>
+
+          <div className="absolute top-2 right-2 bg-white px-2 py-1 rounded">
+            <span className={`text-sm font-bold ${getDifficultyColor(challenge.difficulty)}`}>
+              {challenge.difficulty.toUpperCase()}
+            </span>
+          </div>
+
+          {challenge.isJoined && (
+            <div className="absolute bottom-2 left-2 bg-black text-white px-2 py-1 rounded text-xs">
+              Joined ✓
+            </div>
+          )}
+        </div>
+      </Link>
+
+      <div className="p-4">
+        <Link to={`/challenges/${challenge.id}`}>
+          <h3 className="font-bold text-lg mb-2 hover:underline line-clamp-2">
+            {challenge.title}
+          </h3>
+        </Link>
+
+        <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+          {challenge.description}
+        </p>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500">Duration</span>
+            <span className="font-medium">{challenge.duration} days</span>
+          </div>
+
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500">Participants</span>
+            <span className="font-medium">
+              {challenge.participants.length}
+              {challenge.maxParticipants && ` / ${challenge.maxParticipants}`}
+            </span>
+          </div>
+
+          {challenge.isJoined && progress !== undefined && (
+            <div className="mt-3">
+              <ProgressBar 
+                value={progress} 
+                max={100} 
+                className="h-2"
+                showLabel={false}
+              />
+              <p className="text-xs text-gray-600 mt-1">{progress}% complete</p>
+            </div>
+          )}
+
+          {challenge.prizes.length > 0 && (
+            <div className="mt-3 pt-3 border-t">
+              <p className="text-xs text-gray-500 mb-1">Prizes</p>
+              <p className="text-sm font-medium line-clamp-1">
+                {challenge.prizes[0].title}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+};
+
+// src/features/challenges/components/ChallengeProgress/ChallengeProgress.tsx
+import React from 'react';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import { ProgressBar } from '@/shared/components/ui/ProgressBar';
+import type { ChallengeProgress as Progress, Challenge } from '../../types';
+
+interface ChallengeProgressProps {
+  challenge: Challenge;
+  progress: Progress;
+  onUpdateProgress: (day: number, completed: boolean) => void;
+}
+
+export const ChallengeProgress: React.FC<ChallengeProgressProps> = ({
+  challenge,
+  progress,
+  onUpdateProgress,
+}) => {
+  const today = new Date();
+  const startDate = new Date(challenge.startDate);
+  const currentDay = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+  const renderDayGrid = () => {
+    const days = [];
+    for (let i = 1; i <= challenge.duration; i++) {
+      const isCompleted = progress.completedDays.includes(i);
+      const isToday = i === currentDay;
+      const isFuture = i > currentDay;
+      
+      days.push(
+        <button
+          key={i}
+          onClick={() => !isFuture && onUpdateProgress(i, !isCompleted)}
+          disabled={isFuture}
+          className={`
+            w-12 h-12 rounded-lg border-2 transition-all
+            ${isCompleted 
+              ? 'bg-black text-white border-black' 
+              : 'bg-white text-black border-gray-300'
+            }
+            ${isToday && 'ring-2 ring-offset-2 ring-black'}
+            ${isFuture ? 'opacity-50 cursor-not-allowed' : 'hover:border-black'}
+          `}
+        >
+          <span className="text-sm font-medium">{i}</span>
+        </button>
+      );
+    }
+    return days;
+  };
+
+  return (
+    <Card variant="outlined" padding="lg">
+      <h3 className="text-lg font-semibold mb-4">Your Progress</h3>
+
+      <div className="space-y-6">
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <div>
+            <p className="text-2xl font-bold">{progress.completedDays.length}</p>
+            <p className="text-sm text-gray-600">Days Complete</p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold">{progress.currentStreak}</p>
+            <p className="text-sm text-gray-600">Current Streak</p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold">{progress.totalPoints}</p>
+            <p className="text-sm text-gray-600">Points Earned</p>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div>
+          <div className="flex justify-between text-sm mb-2">
+            <span>Overall Progress</span>
+            <span className="font-medium">{Math.round(progress.completionPercentage)}%</span>
+          </div>
+          <ProgressBar value={progress.completionPercentage} max={100} />
+        </div>
+
+        {/* Day Grid */}
+        <div>
+          <p className="text-sm font-medium mb-3">Daily Check-ins</p>
+          <div className="grid grid-cols-7 gap-2">
+            {renderDayGrid()}
+          </div>
+        </div>
+
+        {/* Next Milestone */}
+        {progress.nextMilestone && (
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <p className="text-sm font-medium mb-1">Next Milestone</p>
+            <p className="text-lg">Day {progress.nextMilestone.day}: {progress.nextMilestone.title}</p>
+            <p className="text-sm text-gray-600 mt-1">
+              Reward: {progress.nextMilestone.reward.title}
+            </p>
+          </div>
+        )}
+
+        {/* Achievements */}
+        {progress.achievements.length > 0 && (
+          <div>
+            <p className="text-sm font-medium mb-3">Achievements</p>
+            <div className="grid grid-cols-2 gap-3">
+              {progress.achievements.map((achievement) => (
+                <div
+                  key={achievement.id}
+                  className="flex items-center space-x-3 p-3 border rounded-lg"
+                >
+                  <span className="text-2xl">{achievement.icon}</span>
+                  <div>
+                    <p className="font-medium text-sm">{achievement.title}</p>
+                    <p className="text-xs text-gray-600">+{achievement.points} points</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+};
+
+// src/features/challenges/components/SubmissionForm/SubmissionForm.tsx
+import React, { useState } from 'react';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import { Input } from '@/shared/components/ui/Input';
+import { TextArea } from '@/shared/components/ui/TextArea';
+import { ImageUpload } from '@/features/closet/components/ImageUpload';
+import { OutfitSelector } from './OutfitSelector';
+import { useChallengesStore } from '../../stores/challenges.store';
+import { toast } from '@/shared/components/feedback/Toast';
+import type { Challenge } from '../../types';
+
+interface SubmissionFormProps {
+  challenge: Challenge;
+  onSuccess: () => void;
+  onCancel: () => void;
+}
+
+export const SubmissionForm: React.FC<SubmissionFormProps> = ({
+  challenge,
+  onSuccess,
+  onCancel,
+}) => {
+  const { createSubmission } = useChallengesStore();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [images, setImages] = useState<File[]>([]);
+  const [selectedOutfitItems, setSelectedOutfitItems] = useState<string[]>([]);
+  
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    tags: [] as string[],
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (images.length === 0) {
+      toast.show({ type: 'error', message: 'Please add at least one photo' });
+      return;
+    }
+
+    const submitData = new FormData();
+    submitData.append('title', formData.title);
+    submitData.append('description', formData.description);
+    
+    formData.tags.forEach(tag => submitData.append('tags[]', tag));
+    selectedOutfitItems.forEach(id => submitData.append('outfitItems[]', id));
+    
+    images.forEach(image => submitData.append('images', image));
+
+    setIsSubmitting(true);
+    try {
+      await createSubmission(challenge.id, submitData);
+      toast.show({ type: 'success', message: 'Submission created successfully!' });
+      onSuccess();
+    } catch (error) {
+      toast.show({ type: 'error', message: 'Failed to create submission' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <Card variant="outlined" padding="lg">
+        <h3 className="text-lg font-semibold mb-4">Submission Details</h3>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Title *
+            </label>
+            <Input
+              value={formData.title}
+              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+              required
+              placeholder="My Amazing Outfit"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Description *
+            </label>
+            <TextArea
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              required
+              rows={4}
+              placeholder="Describe your outfit, inspiration, and how it fits the challenge..."
+            />
+          </div>
+        </div>
+      </Card>
+
+      <Card variant="outlined" padding="lg">
+        <h3 className="text-lg font-semibold mb-4">Photos *</h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Add photos of your outfit from different angles
+        </p>
+        
+        <ImageUpload
+          images={images}
+          onChange={setImages}
+          maxFiles={5}
+        />
+      </Card>
+
+      <Card variant="outlined" padding="lg">
+        <h3 className="text-lg font-semibold mb-4">Outfit Items</h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Link items from your closet (optional)
+        </p>
+        
+        <OutfitSelector
+          selectedItems={selectedOutfitItems}
+          onChange={setSelectedOutfitItems}
+        />
+      </Card>
+
+      <div className="flex justify-end space-x-4">
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onCancel}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          variant="primary"
+          isLoading={isSubmitting}
+        >
+          Submit Entry
+        </Button>
+      </div>
+    </form>
+  );
+};
+
+// src/features/challenges/pages/ChallengesPage.tsx
+import React, { useEffect } from 'react';
+import { Button } from '@/shared/components/ui/Button';
+import { Loading } from '@/shared/components/feedback/Loading';
+import { ChallengeCard } from '../components/ChallengeCard';
+import { ChallengeFilters } from '../components/ChallengeFilters';
+import { Pagination } from '@/shared/components/ui/Pagination';
+import { useChallengesStore } from '../stores/challenges.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+
+const ChallengesPage: React.FC = () => {
+  const { user } = useAuthStore();
+  const {
+    challenges,
+    userProgress,
+    isLoading,
+    error,
+    currentPage,
+    totalPages,
+    activeFilter,
+    fetchChallenges,
+    setActiveFilter,
+  } = useChallengesStore();
+
+  useEffect(() => {
+    fetchChallenges();
+  }, []);
+
+  const handlePageChange = (page: number) => {
+    fetchChallenges(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const filterButtons = [
+    { value: 'all', label: 'All Challenges' },
+    { value: 'joined', label: 'My Challenges' },
+    { value: 'active', label: 'Active' },
+    { value: 'upcoming', label: 'Upcoming' },
+    { value: 'completed', label: 'Completed' },
+  ];
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">Failed to load challenges</p>
+          <Button onClick={() => fetchChallenges()}>Try Again</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">Style Challenges</h1>
+        <p className="text-gray-600">
+          Join challenges, improve your style, and win amazing prizes!
+        </p>
+      </div>
+
+      {/* Filters */}
+      <div className="mb-6">
+        <div className="flex flex-wrap gap-2 mb-4">
+          {filterButtons.map((filter) => (
+            <Button
+              key={filter.value}
+              variant={activeFilter === filter.value ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveFilter(filter.value as any)}
+              disabled={filter.value === 'joined' && !user}
+            >
+              {filter.label}
+            </Button>
+          ))}
+        </div>
+
+        <ChallengeFilters />
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-12">
+          <Loading size="lg" />
+        </div>
+      ) : challenges.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-gray-600 mb-4">
+            {activeFilter === 'joined' 
+              ? "You haven't joined any challenges yet"
+              : 'No challenges found'}
+          </p>
+          {activeFilter !== 'all' && (
+            <Button onClick={() => setActiveFilter('all')}>
+              View All Challenges
+            </Button>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {challenges.map((challenge) => {
+              const progress = userProgress.get(challenge.id);
+              return (
+                <ChallengeCard
+                  key={challenge.id}
+                  challenge={challenge}
+                  progress={progress?.completionPercentage}
+                />
+              );
+            })}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="mt-8 flex justify-center">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+export default ChallengesPage;
