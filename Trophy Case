@@ -1,0 +1,896 @@
+// ===== TROPHY TYPES AND INTERFACES =====
+// src/features/challenges/types/trophy.types.ts
+import type { BaseEntity, ID } from '@/shared/types';
+
+export interface Trophy extends BaseEntity {
+  name: string;
+  description: string;
+  icon: string;
+  category: TrophyCategory;
+  rarity: TrophyRarity;
+  unlockedAt: string;
+  challengeId?: ID;
+  challengeName?: string;
+  criteria: TrophyCriteria;
+  metadata?: Record<string, any>;
+}
+
+export type TrophyCategory = 
+  | 'challenge'
+  | 'streak'
+  | 'milestone'
+  | 'seasonal'
+  | 'community'
+  | 'special';
+
+export type TrophyRarity = 
+  | 'common'    // 75%+ users
+  | 'uncommon'  // 50-75% users
+  | 'rare'      // 25-50% users
+  | 'epic'      // 10-25% users
+  | 'legendary' // <10% users;
+
+export interface TrophyCriteria {
+  type: 'challenge_complete' | 'streak' | 'milestone' | 'community_vote' | 'seasonal_event';
+  requirement: number;
+  progress?: number;
+}
+
+export interface Achievement extends BaseEntity {
+  userId: ID;
+  trophyId: ID;
+  trophy: Trophy;
+  earnedAt: string;
+  progress: number;
+  isNew: boolean;
+  sharedAt?: string;
+}
+
+export interface TrophyStats {
+  totalTrophies: number;
+  trophiesByCategory: Record<TrophyCategory, number>;
+  trophiesByRarity: Record<TrophyRarity, number>;
+  recentTrophies: Trophy[];
+  nextMilestone?: {
+    trophy: Trophy;
+    progress: number;
+    remaining: number;
+  };
+}
+
+// ===== TROPHY DEFINITIONS =====
+// src/features/challenges/data/trophies.ts
+export const TROPHY_DEFINITIONS: Omit<Trophy, 'id' | 'createdAt' | 'updatedAt' | 'unlockedAt'>[] = [
+  // Challenge Completion
+  {
+    name: 'First Steps',
+    description: 'Complete your first challenge',
+    icon: '🏃',
+    category: 'challenge',
+    rarity: 'common',
+    criteria: { type: 'challenge_complete', requirement: 1 }
+  },
+  {
+    name: 'Challenge Master',
+    description: 'Complete 10 challenges',
+    icon: '🏆',
+    category: 'challenge',
+    rarity: 'rare',
+    criteria: { type: 'challenge_complete', requirement: 10 }
+  },
+  {
+    name: 'Unstoppable',
+    description: 'Complete 50 challenges',
+    icon: '💫',
+    category: 'challenge',
+    rarity: 'legendary',
+    criteria: { type: 'challenge_complete', requirement: 50 }
+  },
+  
+  // Streak Achievements
+  {
+    name: 'Week Warrior',
+    description: '7-day challenge streak',
+    icon: '🔥',
+    category: 'streak',
+    rarity: 'uncommon',
+    criteria: { type: 'streak', requirement: 7 }
+  },
+  {
+    name: 'Monthly Marathon',
+    description: '30-day challenge streak',
+    icon: '🌟',
+    category: 'streak',
+    rarity: 'epic',
+    criteria: { type: 'streak', requirement: 30 }
+  },
+  {
+    name: 'Centurion',
+    description: '100-day challenge streak',
+    icon: '💎',
+    category: 'streak',
+    rarity: 'legendary',
+    criteria: { type: 'streak', requirement: 100 }
+  },
+  
+  // Milestone Rewards
+  {
+    name: 'Wardrobe Builder',
+    description: 'Add 50 items to your closet',
+    icon: '👕',
+    category: 'milestone',
+    rarity: 'common',
+    criteria: { type: 'milestone', requirement: 50 }
+  },
+  {
+    name: 'Outfit Creator',
+    description: 'Create 25 outfits',
+    icon: '👗',
+    category: 'milestone',
+    rarity: 'uncommon',
+    criteria: { type: 'milestone', requirement: 25 }
+  },
+  {
+    name: 'Style Influencer',
+    description: 'Get 100 votes on your submissions',
+    icon: '⭐',
+    category: 'milestone',
+    rarity: 'rare',
+    criteria: { type: 'milestone', requirement: 100 }
+  },
+  
+  // Seasonal Trophies
+  {
+    name: 'Spring Bloom',
+    description: 'Complete the Spring Fashion Challenge',
+    icon: '🌸',
+    category: 'seasonal',
+    rarity: 'uncommon',
+    criteria: { type: 'seasonal_event', requirement: 1 }
+  },
+  {
+    name: 'Summer Vibes',
+    description: 'Complete the Summer Style Challenge',
+    icon: '☀️',
+    category: 'seasonal',
+    rarity: 'uncommon',
+    criteria: { type: 'seasonal_event', requirement: 1 }
+  },
+  
+  // Community Recognition
+  {
+    name: 'Crowd Favorite',
+    description: 'Win a community challenge',
+    icon: '🥇',
+    category: 'community',
+    rarity: 'rare',
+    criteria: { type: 'community_vote', requirement: 1 }
+  },
+  {
+    name: 'Trendsetter',
+    description: 'Win 5 community challenges',
+    icon: '👑',
+    category: 'community',
+    rarity: 'epic',
+    criteria: { type: 'community_vote', requirement: 5 }
+  }
+];
+
+// ===== TROPHY STORE =====
+// src/features/challenges/stores/trophy.store.ts
+import { create } from 'zustand';
+import { devtools, persist } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+import type { Trophy, Achievement, TrophyStats, TrophyCategory, TrophyRarity } from '../types/trophy.types';
+import { TROPHY_DEFINITIONS } from '../data/trophies';
+
+interface TrophyState {
+  // State
+  achievements: Achievement[];
+  availableTrophies: Trophy[];
+  stats: TrophyStats | null;
+  isLoading: boolean;
+  newTrophies: Trophy[];
+  
+  // Actions
+  loadAchievements: () => Promise<void>;
+  unlockTrophy: (trophyId: string) => void;
+  markTrophyAsSeen: (trophyId: string) => void;
+  checkProgress: () => void;
+  shareAchievement: (achievementId: string) => Promise<void>;
+  
+  // Computed
+  getTrophiesByCategory: (category: TrophyCategory) => Trophy[];
+  getTrophiesByRarity: (rarity: TrophyRarity) => Trophy[];
+  getProgress: (trophyId: string) => number;
+}
+
+export const useTrophyStore = create<TrophyState>()(
+  devtools(
+    persist(
+      immer((set, get) => ({
+        // Initial State
+        achievements: [],
+        availableTrophies: TROPHY_DEFINITIONS.map((def, index) => ({
+          ...def,
+          id: `trophy-${index}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          unlockedAt: '',
+        })),
+        stats: null,
+        isLoading: false,
+        newTrophies: [],
+
+        // Actions
+        loadAchievements: async () => {
+          set((state) => {
+            state.isLoading = true;
+          });
+
+          try {
+            // Simulate API call
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Calculate stats
+            const achievements = get().achievements;
+            const stats: TrophyStats = {
+              totalTrophies: achievements.length,
+              trophiesByCategory: {} as Record<TrophyCategory, number>,
+              trophiesByRarity: {} as Record<TrophyRarity, number>,
+              recentTrophies: achievements
+                .sort((a, b) => new Date(b.earnedAt).getTime() - new Date(a.earnedAt).getTime())
+                .slice(0, 5)
+                .map(a => a.trophy),
+              nextMilestone: undefined,
+            };
+
+            // Count by category and rarity
+            achievements.forEach(achievement => {
+              const { category, rarity } = achievement.trophy;
+              stats.trophiesByCategory[category] = (stats.trophiesByCategory[category] || 0) + 1;
+              stats.trophiesByRarity[rarity] = (stats.trophiesByRarity[rarity] || 0) + 1;
+            });
+
+            set((state) => {
+              state.stats = stats;
+              state.isLoading = false;
+            });
+          } catch (error) {
+            set((state) => {
+              state.isLoading = false;
+            });
+          }
+        },
+
+        unlockTrophy: (trophyId) => {
+          const trophy = get().availableTrophies.find(t => t.id === trophyId);
+          if (!trophy) return;
+
+          const achievement: Achievement = {
+            id: `achievement-${Date.now()}`,
+            userId: 'current-user',
+            trophyId,
+            trophy: { ...trophy, unlockedAt: new Date().toISOString() },
+            earnedAt: new Date().toISOString(),
+            progress: 100,
+            isNew: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+
+          set((state) => {
+            state.achievements.push(achievement);
+            state.newTrophies.push(trophy);
+          });
+
+          // Update stats
+          get().loadAchievements();
+        },
+
+        markTrophyAsSeen: (trophyId) => {
+          set((state) => {
+            const achievement = state.achievements.find(a => a.trophyId === trophyId);
+            if (achievement) {
+              achievement.isNew = false;
+            }
+            state.newTrophies = state.newTrophies.filter(t => t.id !== trophyId);
+          });
+        },
+
+        checkProgress: () => {
+          // Check all trophy criteria and update progress
+          const { availableTrophies, achievements } = get();
+          const unlockedIds = new Set(achievements.map(a => a.trophyId));
+
+          availableTrophies.forEach(trophy => {
+            if (unlockedIds.has(trophy.id)) return;
+
+            // Check if criteria met (simplified)
+            let shouldUnlock = false;
+            
+            switch (trophy.criteria.type) {
+              case 'challenge_complete':
+                // Check completed challenges count
+                const completedChallenges = Math.floor(Math.random() * 20); // Mock
+                if (completedChallenges >= trophy.criteria.requirement) {
+                  shouldUnlock = true;
+                }
+                break;
+              
+              case 'streak':
+                // Check current streak
+                const currentStreak = Math.floor(Math.random() * 50); // Mock
+                if (currentStreak >= trophy.criteria.requirement) {
+                  shouldUnlock = true;
+                }
+                break;
+            }
+
+            if (shouldUnlock) {
+              get().unlockTrophy(trophy.id);
+            }
+          });
+        },
+
+        shareAchievement: async (achievementId) => {
+          const achievement = get().achievements.find(a => a.id === achievementId);
+          if (!achievement) return;
+
+          // Generate share image/text
+          const shareText = `I just earned the "${achievement.trophy.name}" trophy on CLST! ${achievement.trophy.description}`;
+          
+          if (navigator.share) {
+            await navigator.share({
+              title: 'CLST Achievement',
+              text: shareText,
+            });
+          } else {
+            // Fallback to clipboard
+            await navigator.clipboard.writeText(shareText);
+          }
+
+          set((state) => {
+            const achievement = state.achievements.find(a => a.id === achievementId);
+            if (achievement) {
+              achievement.sharedAt = new Date().toISOString();
+            }
+          });
+        },
+
+        // Computed
+        getTrophiesByCategory: (category) => {
+          return get().achievements
+            .filter(a => a.trophy.category === category)
+            .map(a => a.trophy);
+        },
+
+        getTrophiesByRarity: (rarity) => {
+          return get().achievements
+            .filter(a => a.trophy.rarity === rarity)
+            .map(a => a.trophy);
+        },
+
+        getProgress: (trophyId) => {
+          const achievement = get().achievements.find(a => a.trophyId === trophyId);
+          return achievement?.progress || 0;
+        },
+      })),
+      {
+        name: 'clst-trophy-store',
+      }
+    )
+  )
+);
+
+// ===== TROPHY COMPONENTS =====
+// src/features/challenges/components/TrophyCard/TrophyCard.tsx
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import type { Trophy, Achievement } from '../../types/trophy.types';
+
+interface TrophyCardProps {
+  trophy: Trophy;
+  achievement?: Achievement;
+  isLocked?: boolean;
+  onShare?: () => void;
+}
+
+export const TrophyCard: React.FC<TrophyCardProps> = ({
+  trophy,
+  achievement,
+  isLocked = false,
+  onShare,
+}) => {
+  const [showDetails, setShowDetails] = useState(false);
+
+  const rarityColors = {
+    common: 'border-gray-400 bg-gray-50',
+    uncommon: 'border-green-500 bg-green-50',
+    rare: 'border-blue-500 bg-blue-50',
+    epic: 'border-purple-500 bg-purple-50',
+    legendary: 'border-yellow-500 bg-yellow-50',
+  };
+
+  const rarityGlow = {
+    common: '',
+    uncommon: 'shadow-green-200',
+    rare: 'shadow-blue-200',
+    epic: 'shadow-purple-200',
+    legendary: 'shadow-yellow-200',
+  };
+
+  return (
+    <motion.div
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+      onClick={() => setShowDetails(!showDetails)}
+    >
+      <Card
+        variant="outlined"
+        className={`
+          relative cursor-pointer transition-all
+          ${isLocked ? 'opacity-50 grayscale' : ''}
+          ${achievement?.isNew ? 'ring-2 ring-yellow-400 ring-offset-2' : ''}
+          ${rarityColors[trophy.rarity]}
+          ${!isLocked ? `shadow-lg ${rarityGlow[trophy.rarity]}` : ''}
+        `}
+      >
+        <div className="p-6 text-center">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+            className="text-6xl mb-3"
+          >
+            {isLocked ? '🔒' : trophy.icon}
+          </motion.div>
+          
+          <h3 className="font-bold text-lg mb-1">{trophy.name}</h3>
+          <p className="text-sm text-gray-600 mb-2">{trophy.description}</p>
+          
+          <div className="flex items-center justify-center space-x-4 text-sm">
+            <span className="capitalize px-2 py-1 bg-black text-white rounded-full text-xs">
+              {trophy.rarity}
+            </span>
+          </div>
+
+          {achievement && (
+            <p className="text-xs text-gray-500 mt-2">
+              Earned {new Date(achievement.earnedAt).toLocaleDateString()}
+            </p>
+          )}
+
+          {achievement?.isNew && (
+            <span className="absolute top-2 right-2 bg-yellow-400 text-black text-xs px-2 py-1 rounded-full">
+              NEW!
+            </span>
+          )}
+        </div>
+
+        {showDetails && !isLocked && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="border-t p-4"
+          >
+            {trophy.challengeName && (
+              <p className="text-sm mb-2">
+                <span className="font-medium">Challenge:</span> {trophy.challengeName}
+              </p>
+            )}
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">
+                {trophy.criteria.type.replace('_', ' ')}
+              </span>
+              {onShare && (
+                <Button variant="ghost" size="sm" onClick={(e) => {
+                  e.stopPropagation();
+                  onShare();
+                }}>
+                  Share
+                </Button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </Card>
+    </motion.div>
+  );
+};
+
+// src/features/challenges/components/TrophyReveal/TrophyReveal.tsx
+import React, { useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import confetti from 'canvas-confetti';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import type { Trophy } from '../../types/trophy.types';
+
+interface TrophyRevealProps {
+  trophy: Trophy;
+  onClose: () => void;
+}
+
+export const TrophyReveal: React.FC<TrophyRevealProps> = ({ trophy, onClose }) => {
+  useEffect(() => {
+    // Trigger confetti
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 }
+    });
+  }, []);
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ scale: 0, rotate: -180 }}
+          animate={{ scale: 1, rotate: 0 }}
+          exit={{ scale: 0, rotate: 180 }}
+          transition={{ type: 'spring', duration: 0.7 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Card variant="outlined" className="bg-white p-8 max-w-md">
+            <motion.div
+              initial={{ y: -50 }}
+              animate={{ y: 0 }}
+              transition={{ delay: 0.3, type: 'spring' }}
+              className="text-center"
+            >
+              <h2 className="text-2xl font-bold mb-4">🎉 New Trophy Unlocked!</h2>
+              
+              <motion.div
+                animate={{ 
+                  rotate: [0, 10, -10, 10, 0],
+                  scale: [1, 1.1, 1]
+                }}
+                transition={{ 
+                  duration: 2,
+                  repeat: Infinity,
+                  repeatDelay: 1
+                }}
+                className="text-8xl mb-6"
+              >
+                {trophy.icon}
+              </motion.div>
+              
+              <h3 className="text-xl font-bold mb-2">{trophy.name}</h3>
+              <p className="text-gray-600 mb-4">{trophy.description}</p>
+              
+              <div className="flex items-center justify-center space-x-4 mb-6">
+                <span className="capitalize px-3 py-1 bg-black text-white rounded-full">
+                  {trophy.rarity}
+                </span>
+              </div>
+              
+              <Button variant="primary" onClick={onClose}>
+                Awesome!
+              </Button>
+            </motion.div>
+          </Card>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+// src/features/challenges/components/TrophyProgress/TrophyProgress.tsx
+import React from 'react';
+import { motion } from 'framer-motion';
+import type { Trophy } from '../../types/trophy.types';
+
+interface TrophyProgressProps {
+  trophy: Trophy;
+  current: number;
+  required: number;
+}
+
+export const TrophyProgress: React.FC<TrophyProgressProps> = ({
+  trophy,
+  current,
+  required,
+}) => {
+  const progress = Math.min((current / required) * 100, 100);
+  const isComplete = current >= required;
+
+  return (
+    <div className="p-4 border rounded-lg">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center space-x-3">
+          <span className="text-2xl">{isComplete ? trophy.icon : '🔒'}</span>
+          <div>
+            <h4 className="font-medium">{trophy.name}</h4>
+            <p className="text-sm text-gray-600">{trophy.description}</p>
+          </div>
+        </div>
+        <span className="text-sm font-medium">
+          {current}/{required}
+        </span>
+      </div>
+      
+      <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${progress}%` }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className={`h-full ${isComplete ? 'bg-green-500' : 'bg-blue-500'}`}
+        />
+      </div>
+    </div>
+  );
+};
+
+// ===== TROPHY CASE PAGE =====
+// src/features/challenges/pages/TrophyCasePage.tsx
+import React, { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import { TrophyCard } from '../components/TrophyCard';
+import { TrophyReveal } from '../components/TrophyReveal';
+import { TrophyProgress } from '../components/TrophyProgress';
+import { useTrophyStore } from '../stores/trophy.store';
+import { toast } from '@/shared/components/feedback/Toast';
+
+const TrophyCasePage: React.FC = () => {
+  const {
+    achievements,
+    availableTrophies,
+    stats,
+    newTrophies,
+    loadAchievements,
+    markTrophyAsSeen,
+    shareAchievement,
+    checkProgress,
+  } = useTrophyStore();
+
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [showReveal, setShowReveal] = useState(false);
+  const [revealTrophy, setRevealTrophy] = useState<any>(null);
+
+  useEffect(() => {
+    loadAchievements();
+    checkProgress();
+  }, []);
+
+  useEffect(() => {
+    if (newTrophies.length > 0) {
+      setRevealTrophy(newTrophies[0]);
+      setShowReveal(true);
+    }
+  }, [newTrophies]);
+
+  const handleCloseReveal = () => {
+    if (revealTrophy) {
+      markTrophyAsSeen(revealTrophy.id);
+    }
+    setShowReveal(false);
+    setRevealTrophy(null);
+  };
+
+  const handleShare = async (achievementId: string) => {
+    try {
+      await shareAchievement(achievementId);
+      toast.show({ type: 'success', message: 'Achievement shared!' });
+    } catch (error) {
+      toast.show({ type: 'error', message: 'Failed to share' });
+    }
+  };
+
+  const categories = [
+    { value: 'all', label: 'All Trophies', icon: '🏆' },
+    { value: 'challenge', label: 'Challenges', icon: '🎯' },
+    { value: 'streak', label: 'Streaks', icon: '🔥' },
+    { value: 'milestone', label: 'Milestones', icon: '🎖️' },
+    { value: 'seasonal', label: 'Seasonal', icon: '🌟' },
+    { value: 'community', label: 'Community', icon: '👥' },
+  ];
+
+  const filteredTrophies = selectedCategory === 'all'
+    ? availableTrophies
+    : availableTrophies.filter(t => t.category === selectedCategory);
+
+  const unlockedIds = new Set(achievements.map(a => a.trophyId));
+
+  // Mock progress data
+  const upcomingTrophies = availableTrophies
+    .filter(t => !unlockedIds.has(t.id))
+    .slice(0, 3)
+    .map(t => ({
+      trophy: t,
+      current: Math.floor(Math.random() * t.criteria.requirement),
+      required: t.criteria.requirement,
+    }));
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">Trophy Case</h1>
+        <p className="text-gray-600">
+          Your achievements and milestones in the CLST community
+        </p>
+      </div>
+
+      {/* Stats Overview */}
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <Card variant="outlined" padding="md">
+            <div className="text-center">
+              <p className="text-3xl font-bold">{stats.totalTrophies}</p>
+              <p className="text-sm text-gray-600">Total Trophies</p>
+            </div>
+          </Card>
+          <Card variant="outlined" padding="md">
+            <div className="text-center">
+              <p className="text-3xl font-bold">
+                {achievements.filter(a => a.trophy.rarity === 'legendary').length}
+              </p>
+              <p className="text-sm text-gray-600">Legendary</p>
+            </div>
+          </Card>
+          <Card variant="outlined" padding="md">
+            <div className="text-center">
+              <p className="text-3xl font-bold">
+                {achievements.filter(a => a.trophy.rarity === 'rare').length + 
+                 achievements.filter(a => a.trophy.rarity === 'epic').length}
+              </p>
+              <p className="text-sm text-gray-600">Rare & Epic</p>
+            </div>
+          </Card>
+          <Card variant="outlined" padding="md">
+            <div className="text-center">
+              <p className="text-3xl font-bold">
+                {Math.round((achievements.length / availableTrophies.length) * 100)}%
+              </p>
+              <p className="text-sm text-gray-600">Completion</p>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Progress Section */}
+      <Card variant="outlined" padding="lg" className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Upcoming Trophies</h2>
+        <div className="space-y-3">
+          {upcomingTrophies.map(({ trophy, current, required }) => (
+            <TrophyProgress
+              key={trophy.id}
+              trophy={trophy}
+              current={current}
+              required={required}
+            />
+          ))}
+        </div>
+      </Card>
+
+      {/* Category Filter */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        {categories.map(cat => (
+          <Button
+            key={cat.value}
+            variant={selectedCategory === cat.value ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => setSelectedCategory(cat.value)}
+          >
+            <span className="mr-1">{cat.icon}</span>
+            {cat.label}
+          </Button>
+        ))}
+      </div>
+
+      {/* Trophy Grid */}
+      <motion.div
+        layout
+        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
+      >
+        {filteredTrophies.map(trophy => {
+          const achievement = achievements.find(a => a.trophyId === trophy.id);
+          const isLocked = !achievement;
+
+          return (
+            <motion.div
+              key={trophy.id}
+              layout
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              <TrophyCard
+                trophy={trophy}
+                achievement={achievement}
+                isLocked={isLocked}
+                onShare={achievement ? () => handleShare(achievement.id) : undefined}
+              />
+            </motion.div>
+          );
+        })}
+      </motion.div>
+
+      {/* Trophy Reveal Modal */}
+      {showReveal && revealTrophy && (
+        <TrophyReveal trophy={revealTrophy} onClose={handleCloseReveal} />
+      )}
+
+      {/* Export Options */}
+      <div className="mt-12 text-center">
+        <Button variant="secondary">
+          Export Trophy Case
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+export default TrophyCasePage;
+
+// ===== LEADERBOARD INTEGRATION =====
+// src/features/challenges/components/TrophyLeaderboard/TrophyLeaderboard.tsx
+import React from 'react';
+import { Card } from '@/shared/components/ui/Card';
+
+interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  username: string;
+  avatar: string;
+  totalTrophies: number;
+  legendaryCount: number;
+}
+
+export const TrophyLeaderboard: React.FC = () => {
+  // Mock data
+  const leaderboard: LeaderboardEntry[] = [
+    {
+      rank: 1,
+      userId: '1',
+      username: 'StyleMaster',
+      avatar: '/avatar1.jpg',
+      totalTrophies: 45,
+      legendaryCount: 3,
+    },
+    // ... more entries
+  ];
+
+  return (
+    <Card variant="outlined" padding="lg">
+      <h3 className="text-xl font-semibold mb-4">Trophy Leaderboard</h3>
+      
+      <div className="space-y-3">
+        {leaderboard.map((entry) => (
+          <div
+            key={entry.userId}
+            className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50"
+          >
+            <div className="flex items-center space-x-3">
+              <span className="text-2xl font-bold text-gray-400">
+                #{entry.rank}
+              </span>
+              <img
+                src={entry.avatar}
+                alt={entry.username}
+                className="w-10 h-10 rounded-full"
+              />
+              <div>
+                <p className="font-medium">{entry.username}</p>
+                <p className="text-sm text-gray-600">
+                  {entry.totalTrophies} trophies • {entry.legendaryCount} legendary
+                </p>
+              </div>
+            </div>
+            <span className="text-lg font-bold">{entry.totalTrophies}</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+};
