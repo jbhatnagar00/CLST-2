@@ -1,0 +1,172 @@
+clst/
+├── src/
+│   ├── app/                      # Application core
+│   │   ├── App.tsx              # Root component
+│   │   ├── App.test.tsx         # Root component tests
+│   │   ├── Router.tsx           # Route configuration
+│   │   └── providers/           # App-level providers
+│   │       ├── index.tsx        # Provider composition
+│   │       ├── ThemeProvider.tsx
+│   │       ├── AuthProvider.tsx
+│   │       └── QueryProvider.tsx
+│   │
+│   ├── features/                 # Feature modules
+│   │   ├── closet/              # Digital closet feature
+│   │   │   ├── api/             # API calls
+│   │   │   ├── components/      # Feature components
+│   │   │   ├── hooks/           # Custom hooks
+│   │   │   ├── stores/          # Zustand stores
+│   │   │   ├── types/           # TypeScript types
+│   │   │   ├── utils/           # Utility functions
+│   │   │   └── index.ts         # Public exports
+│   │   │
+│   │   ├── outfits/             # Outfit creation
+│   │   │   ├── api/
+│   │   │   ├── components/
+│   │   │   ├── hooks/
+│   │   │   ├── stores/
+│   │   │   ├── types/
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── marketplace/         # Buy/sell marketplace
+│   │   │   ├── api/
+│   │   │   ├── components/
+│   │   │   ├── hooks/
+│   │   │   ├── stores/
+│   │   │   ├── types/
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── challenges/          # Style challenges
+│   │   │   ├── api/
+│   │   │   ├── components/
+│   │   │   ├── hooks/
+│   │   │   ├── stores/
+│   │   │   ├── types/
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── trends/              # Trend tracking
+│   │   │   ├── api/
+│   │   │   ├── components/
+│   │   │   ├── hooks/
+│   │   │   ├── stores/
+│   │   │   ├── types/
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── auth/                # Authentication
+│   │   │   ├── api/
+│   │   │   ├── components/
+│   │   │   ├── hooks/
+│   │   │   ├── stores/
+│   │   │   ├── types/
+│   │   │   └── index.ts
+│   │   │
+│   │   └── profile/             # User profile
+│   │       ├── api/
+│   │       ├── components/
+│   │       ├── hooks/
+│   │       ├── stores/
+│   │       ├── types/
+│   │       └── index.ts
+│   │
+│   ├── shared/                   # Shared resources
+│   │   ├── components/          # Reusable components
+│   │   │   ├── ui/             # Base UI components
+│   │   │   │   ├── Button/
+│   │   │   │   ├── Card/
+│   │   │   │   ├── Modal/
+│   │   │   │   ├── VirtualList/
+│   │   │   │   └── index.ts
+│   │   │   ├── layout/         # Layout components
+│   │   │   │   ├── Header/
+│   │   │   │   ├── Footer/
+│   │   │   │   ├── Sidebar/
+│   │   │   │   └── index.ts
+│   │   │   └── feedback/       # Feedback components
+│   │   │       ├── ErrorBoundary/
+│   │   │       ├── Loading/
+│   │   │       ├── Toast/
+│   │   │       └── index.ts
+│   │   │
+│   │   ├── hooks/               # Global hooks
+│   │   │   ├── useAnalytics.ts
+│   │   │   ├── useCache.ts
+│   │   │   ├── useOffline.ts
+│   │   │   ├── useVirtualScroll.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── services/            # Core services
+│   │   │   ├── api/            # API client
+│   │   │   ├── cache/          # Caching layer
+│   │   │   ├── analytics/      # Analytics service
+│   │   │   ├── storage/        # Local storage
+│   │   │   └── weather/        # Weather API
+│   │   │
+│   │   ├── stores/              # Global stores
+│   │   │   ├── app.store.ts    # App-wide state
+│   │   │   ├── user.store.ts   # User state
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── types/               # Global types
+│   │   │   ├── api.types.ts
+│   │   │   ├── common.types.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   └── utils/               # Global utilities
+│   │       ├── constants.ts
+│   │       ├── helpers.ts
+│   │       ├── validators.ts
+│   │       └── index.ts
+│   │
+│   ├── styles/                   # Global styles
+│   │   ├── globals.css          # Global CSS
+│   │   ├── variables.css        # CSS variables
+│   │   └── tailwind.css         # Tailwind imports
+│   │
+│   ├── locales/                  # i18n translations
+│   │   ├── en/
+│   │   │   ├── common.json
+│   │   │   ├── closet.json
+│   │   │   └── marketplace.json
+│   │   └── es/
+│   │       ├── common.json
+│   │       ├── closet.json
+│   │       └── marketplace.json
+│   │
+│   ├── assets/                   # Static assets
+│   │   ├── images/
+│   │   ├── icons/
+│   │   └── fonts/
+│   │
+│   └── main.tsx                  # Entry point
+│
+├── public/                       # Public assets
+│   ├── index.html
+│   ├── manifest.json
+│   └── icons/
+│
+├── tests/                        # Test configuration
+│   ├── setup.ts                 # Test setup
+│   ├── mocks/                   # Test mocks
+│   └── utils/                   # Test utilities
+│
+├── .github/                      # GitHub configuration
+│   └── workflows/               # CI/CD workflows
+│
+├── scripts/                      # Build/deploy scripts
+│   ├── analyze.ts              # Bundle analyzer
+│   └── generate-types.ts       # Type generation
+│
+├── docs/                         # Documentation
+│   ├── architecture.md
+│   ├── contributing.md
+│   └── api/
+│
+├── .env.example                  # Environment variables
+├── .eslintrc.js                 # ESLint config
+├── .prettierrc                  # Prettier config
+├── tsconfig.json                # TypeScript config
+├── vite.config.ts               # Vite config
+├── vitest.config.ts             # Vitest config
+├── tailwind.config.js           # Tailwind config
+├── package.json
+└── README.md
