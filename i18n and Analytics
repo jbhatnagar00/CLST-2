@@ -1,0 +1,1369 @@
+// ===== INTERNATIONALIZATION (i18n) =====
+// src/shared/services/i18n/config.ts
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import LanguageDetector from 'i18next-browser-languagedetector';
+import Backend from 'i18next-http-backend';
+import { format as dateFormat, formatDistance, formatRelative } from 'date-fns';
+import { enUS, es, fr, ja } from 'date-fns/locale';
+
+// Date-fns locale mapping
+const dateFnsLocales = {
+  en: enUS,
+  es: es,
+  fr: fr,
+  ja: ja,
+};
+
+// Currency configuration
+const currencyConfig = {
+  en: { currency: 'USD', locale: 'en-US' },
+  es: { currency: 'EUR', locale: 'es-ES' },
+  fr: { currency: 'EUR', locale: 'fr-FR' },
+  ja: { currency: 'JPY', locale: 'ja-JP' },
+};
+
+// RTL languages preparation
+const rtlLanguages = ['ar', 'he', 'fa', 'ur'];
+
+i18n
+  .use(Backend)
+  .use(LanguageDetector)
+  .use(initReactI18next)
+  .init({
+    fallbackLng: 'en',
+    debug: process.env.NODE_ENV === 'development',
+    
+    supportedLngs: ['en', 'es', 'fr', 'ja'],
+    
+    interpolation: {
+      escapeValue: false,
+      format: (value, format, lng) => {
+        if (format === 'date') {
+          return dateFormat(new Date(value), 'PP', {
+            locale: dateFnsLocales[lng as keyof typeof dateFnsLocales],
+          });
+        }
+        if (format === 'dateTime') {
+          return dateFormat(new Date(value), 'PPpp', {
+            locale: dateFnsLocales[lng as keyof typeof dateFnsLocales],
+          });
+        }
+        if (format === 'relative') {
+          return formatRelative(new Date(value), new Date(), {
+            locale: dateFnsLocales[lng as keyof typeof dateFnsLocales],
+          });
+        }
+        if (format === 'distance') {
+          return formatDistance(new Date(value), new Date(), {
+            addSuffix: true,
+            locale: dateFnsLocales[lng as keyof typeof dateFnsLocales],
+          });
+        }
+        if (format === 'currency') {
+          const config = currencyConfig[lng as keyof typeof currencyConfig];
+          return new Intl.NumberFormat(config.locale, {
+            style: 'currency',
+            currency: config.currency,
+          }).format(Number(value));
+        }
+        if (format === 'number') {
+          const config = currencyConfig[lng as keyof typeof currencyConfig];
+          return new Intl.NumberFormat(config.locale).format(Number(value));
+        }
+        return value;
+      },
+    },
+
+    backend: {
+      loadPath: '/locales/{{lng}}/{{ns}}.json',
+      addPath: '/locales/add/{{lng}}/{{ns}}',
+    },
+
+    ns: ['common', 'closet', 'marketplace', 'challenges', 'auth', 'errors'],
+    defaultNS: 'common',
+
+    react: {
+      useSuspense: false,
+    },
+
+    detection: {
+      order: ['localStorage', 'cookie', 'navigator', 'htmlTag'],
+      caches: ['localStorage', 'cookie'],
+    },
+  });
+
+// RTL support helper
+export const isRTL = (language: string): boolean => {
+  return rtlLanguages.includes(language);
+};
+
+// Language direction helper
+export const getDirection = (language: string): 'ltr' | 'rtl' => {
+  return isRTL(language) ? 'rtl' : 'ltr';
+};
+
+export default i18n;
+
+// Translation files structure
+// public/locales/en/common.json
+{
+  "app": {
+    "name": "CLST",
+    "tagline": "Your Digital Fashion Closet"
+  },
+  "nav": {
+    "closet": "Closet",
+    "outfits": "Outfits",
+    "marketplace": "Marketplace",
+    "challenges": "Challenges",
+    "trends": "Trends",
+    "profile": "Profile"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "filter": "Filter",
+    "sort": "Sort",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "close": "Close",
+    "view": "View",
+    "share": "Share",
+    "download": "Download",
+    "upload": "Upload",
+    "selectAll": "Select All",
+    "deselectAll": "Deselect All",
+    "noResults": "No results found",
+    "tryAgain": "Try Again"
+  },
+  "time": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "tomorrow": "Tomorrow",
+    "week": "Week",
+    "month": "Month",
+    "year": "Year",
+    "days": "{{count}} day",
+    "days_plural": "{{count}} days",
+    "hours": "{{count}} hour",
+    "hours_plural": "{{count}} hours",
+    "minutes": "{{count}} minute",
+    "minutes_plural": "{{count}} minutes"
+  },
+  "validation": {
+    "required": "This field is required",
+    "email": "Please enter a valid email",
+    "minLength": "Must be at least {{min}} characters",
+    "maxLength": "Must be no more than {{max}} characters",
+    "pattern": "Invalid format",
+    "number": "Must be a number",
+    "min": "Must be at least {{min}}",
+    "max": "Must be no more than {{max}}"
+  }
+}
+
+// public/locales/en/closet.json
+{
+  "title": "My Closet",
+  "subtitle": "{{count}} items • Total value: {{value, currency}}",
+  "empty": {
+    "title": "Your closet is empty",
+    "description": "Start by adding your first item",
+    "action": "Add Item"
+  },
+  "item": {
+    "add": "Add Item",
+    "edit": "Edit Item",
+    "delete": "Delete Item",
+    "deleteConfirm": "Are you sure you want to delete this item?",
+    "worn": "Worn {{count}} time",
+    "worn_plural": "Worn {{count}} times",
+    "lastWorn": "Last worn {{date, relative}}",
+    "neverWorn": "Never worn",
+    "costPerWear": "Cost per wear: {{amount, currency}}"
+  },
+  "form": {
+    "name": "Name",
+    "namePlaceholder": "Black T-Shirt",
+    "category": "Category",
+    "brand": "Brand",
+    "brandPlaceholder": "Nike",
+    "size": "Size",
+    "color": "Color",
+    "price": "Price",
+    "purchaseDate": "Purchase Date",
+    "material": "Material",
+    "tags": "Tags",
+    "notes": "Notes",
+    "condition": "Condition",
+    "seasons": "Seasons",
+    "occasions": "Occasions"
+  },
+  "categories": {
+    "tops": "Tops",
+    "bottoms": "Bottoms",
+    "dresses": "Dresses",
+    "outerwear": "Outerwear",
+    "shoes": "Shoes",
+    "accessories": "Accessories",
+    "underwear": "Underwear",
+    "activewear": "Activewear",
+    "swimwear": "Swimwear",
+    "other": "Other"
+  },
+  "conditions": {
+    "new": "New",
+    "excellent": "Excellent",
+    "good": "Good",
+    "fair": "Fair",
+    "poor": "Poor"
+  },
+  "seasons": {
+    "spring": "Spring",
+    "summer": "Summer",
+    "fall": "Fall",
+    "winter": "Winter",
+    "allSeason": "All Season"
+  },
+  "occasions": {
+    "casual": "Casual",
+    "work": "Work",
+    "formal": "Formal",
+    "party": "Party",
+    "sport": "Sport",
+    "beach": "Beach",
+    "date": "Date",
+    "other": "Other"
+  },
+  "filters": {
+    "all": "All",
+    "category": "Category",
+    "season": "Season",
+    "occasion": "Occasion",
+    "brand": "Brand",
+    "color": "Color",
+    "priceRange": "Price Range",
+    "clear": "Clear Filters"
+  },
+  "sort": {
+    "newest": "Newest First",
+    "oldest": "Oldest First",
+    "name": "Name",
+    "price": "Price",
+    "wearCount": "Most Worn",
+    "leastWorn": "Least Worn"
+  }
+}
+
+// Spanish translations
+// public/locales/es/common.json
+{
+  "app": {
+    "name": "CLST",
+    "tagline": "Tu Armario Digital de Moda"
+  },
+  "nav": {
+    "closet": "Armario",
+    "outfits": "Conjuntos",
+    "marketplace": "Mercado",
+    "challenges": "Desafíos",
+    "trends": "Tendencias",
+    "profile": "Perfil"
+  },
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "sort": "Ordenar",
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "confirm": "Confirmar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "close": "Cerrar",
+    "view": "Ver",
+    "share": "Compartir",
+    "download": "Descargar",
+    "upload": "Subir",
+    "selectAll": "Seleccionar Todo",
+    "deselectAll": "Deseleccionar Todo",
+    "noResults": "No se encontraron resultados",
+    "tryAgain": "Intentar de Nuevo"
+  }
+}
+
+// French translations
+// public/locales/fr/common.json
+{
+  "app": {
+    "name": "CLST",
+    "tagline": "Votre Garde-robe Numérique"
+  },
+  "nav": {
+    "closet": "Garde-robe",
+    "outfits": "Tenues",
+    "marketplace": "Marché",
+    "challenges": "Défis",
+    "trends": "Tendances",
+    "profile": "Profil"
+  }
+}
+
+// Japanese translations
+// public/locales/ja/common.json
+{
+  "app": {
+    "name": "CLST",
+    "tagline": "デジタルファッションクローゼット"
+  },
+  "nav": {
+    "closet": "クローゼット",
+    "outfits": "コーディネート",
+    "marketplace": "マーケット",
+    "challenges": "チャレンジ",
+    "trends": "トレンド",
+    "profile": "プロフィール"
+  }
+}
+
+// Translation hooks and components
+// src/shared/hooks/useTranslation.ts
+import { useTranslation as useI18nTranslation } from 'react-i18next';
+import { useCallback } from 'react';
+import { analytics } from '@/shared/services/analytics';
+
+export function useTranslation(namespace?: string) {
+  const { t, i18n } = useI18nTranslation(namespace);
+
+  const changeLanguage = useCallback(async (language: string) => {
+    try {
+      await i18n.changeLanguage(language);
+      
+      // Update HTML attributes
+      document.documentElement.lang = language;
+      document.documentElement.dir = getDirection(language);
+      
+      // Track language change
+      analytics.track({
+        category: 'User Preference',
+        action: 'language_changed',
+        label: language,
+      });
+    } catch (error) {
+      console.error('Failed to change language:', error);
+    }
+  }, [i18n]);
+
+  const formatCurrency = useCallback((amount: number, currency?: string) => {
+    const config = currencyConfig[i18n.language as keyof typeof currencyConfig];
+    return new Intl.NumberFormat(config.locale, {
+      style: 'currency',
+      currency: currency || config.currency,
+    }).format(amount);
+  }, [i18n.language]);
+
+  const formatDate = useCallback((date: Date | string, format?: string) => {
+    const locale = dateFnsLocales[i18n.language as keyof typeof dateFnsLocales];
+    return dateFormat(
+      typeof date === 'string' ? new Date(date) : date,
+      format || 'PP',
+      { locale }
+    );
+  }, [i18n.language]);
+
+  return {
+    t,
+    i18n,
+    changeLanguage,
+    formatCurrency,
+    formatDate,
+    currentLanguage: i18n.language,
+    isRTL: isRTL(i18n.language),
+  };
+}
+
+// Language switcher component
+// src/shared/components/LanguageSwitcher/LanguageSwitcher.tsx
+import React from 'react';
+import { useTranslation } from '@/shared/hooks/useTranslation';
+import { Select } from '@/shared/components/ui/Select';
+
+const languages = [
+  { value: 'en', label: 'English', flag: '🇺🇸' },
+  { value: 'es', label: 'Español', flag: '🇪🇸' },
+  { value: 'fr', label: 'Français', flag: '🇫🇷' },
+  { value: 'ja', label: '日本語', flag: '🇯🇵' },
+];
+
+export const LanguageSwitcher: React.FC = () => {
+  const { currentLanguage, changeLanguage } = useTranslation();
+
+  return (
+    <div className="flex items-center space-x-2">
+      <span className="text-2xl">
+        {languages.find(l => l.value === currentLanguage)?.flag}
+      </span>
+      <Select
+        value={currentLanguage}
+        onChange={changeLanguage}
+        options={languages.map(l => ({ value: l.value, label: l.label }))}
+        className="w-32"
+      />
+    </div>
+  );
+};
+
+// Translation management system
+// src/shared/services/i18n/translationManager.ts
+interface TranslationKey {
+  key: string;
+  namespace: string;
+  translations: Record<string, string>;
+  context?: string;
+  maxLength?: number;
+}
+
+export class TranslationManager {
+  private missingKeys: Map<string, Set<string>> = new Map();
+  private translationKeys: TranslationKey[] = [];
+
+  // Collect missing translations
+  collectMissingKey(language: string, key: string) {
+    if (!this.missingKeys.has(language)) {
+      this.missingKeys.set(language, new Set());
+    }
+    this.missingKeys.get(language)!.add(key);
+  }
+
+  // Export missing translations
+  exportMissingTranslations(): Record<string, string[]> {
+    const result: Record<string, string[]> = {};
+    this.missingKeys.forEach((keys, language) => {
+      result[language] = Array.from(keys);
+    });
+    return result;
+  }
+
+  // Import translations from CSV/JSON
+  async importTranslations(file: File): Promise<void> {
+    const text = await file.text();
+    const data = file.name.endsWith('.json') 
+      ? JSON.parse(text)
+      : this.parseCSV(text);
+    
+    // Process and validate translations
+    this.processTranslations(data);
+  }
+
+  // Validate translation completeness
+  validateTranslations(): {
+    complete: boolean;
+    missing: Record<string, string[]>;
+    coverage: Record<string, number>;
+  } {
+    const languages = ['en', 'es', 'fr', 'ja'];
+    const missing: Record<string, string[]> = {};
+    const coverage: Record<string, number> = {};
+    
+    languages.forEach(lang => {
+      const missingKeys = this.findMissingKeys(lang);
+      missing[lang] = missingKeys;
+      coverage[lang] = ((this.translationKeys.length - missingKeys.length) / this.translationKeys.length) * 100;
+    });
+
+    return {
+      complete: Object.values(missing).every(keys => keys.length === 0),
+      missing,
+      coverage,
+    };
+  }
+
+  private parseCSV(text: string): any {
+    // CSV parsing logic
+    const lines = text.split('\n');
+    const headers = lines[0].split(',');
+    const data: any = {};
+    
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',');
+      const key = values[0];
+      headers.slice(1).forEach((lang, index) => {
+        if (!data[lang]) data[lang] = {};
+        data[lang][key] = values[index + 1];
+      });
+    }
+    
+    return data;
+  }
+
+  private processTranslations(data: any) {
+    // Process and store translations
+    Object.entries(data).forEach(([lang, translations]) => {
+      Object.entries(translations as Record<string, string>).forEach(([key, value]) => {
+        // Store or update translation
+        this.updateTranslation(lang, key, value);
+      });
+    });
+  }
+
+  private findMissingKeys(language: string): string[] {
+    return this.translationKeys
+      .filter(key => !key.translations[language])
+      .map(key => key.key);
+  }
+
+  private updateTranslation(language: string, key: string, value: string) {
+    const existingKey = this.translationKeys.find(k => k.key === key);
+    if (existingKey) {
+      existingKey.translations[language] = value;
+    } else {
+      this.translationKeys.push({
+        key,
+        namespace: 'common',
+        translations: { [language]: value },
+      });
+    }
+  }
+}
+
+// ===== ANALYTICS IMPLEMENTATION =====
+// src/shared/services/analytics/providers/mixpanel.ts
+import mixpanel from 'mixpanel-browser';
+
+export class MixpanelProvider {
+  private initialized = false;
+
+  initialize(token: string, config?: any) {
+    if (this.initialized) return;
+    
+    mixpanel.init(token, {
+      debug: process.env.NODE_ENV === 'development',
+      track_pageview: true,
+      persistence: 'localStorage',
+      ...config,
+    });
+    
+    this.initialized = true;
+  }
+
+  identify(userId: string, traits?: Record<string, any>) {
+    mixpanel.identify(userId);
+    if (traits) {
+      mixpanel.people.set(traits);
+    }
+  }
+
+  track(event: string, properties?: Record<string, any>) {
+    mixpanel.track(event, properties);
+  }
+
+  trackRevenue(amount: number, properties?: Record<string, any>) {
+    mixpanel.people.track_charge(amount, properties);
+    mixpanel.track('Revenue', {
+      amount,
+      ...properties,
+    });
+  }
+
+  setUserProperty(property: string, value: any) {
+    mixpanel.people.set({ [property]: value });
+  }
+
+  incrementUserProperty(property: string, value = 1) {
+    mixpanel.people.increment(property, value);
+  }
+
+  reset() {
+    mixpanel.reset();
+  }
+}
+
+// src/shared/services/analytics/providers/posthog.ts
+import posthog from 'posthog-js';
+
+export class PostHogProvider {
+  private initialized = false;
+
+  initialize(apiKey: string, config?: any) {
+    if (this.initialized) return;
+    
+    posthog.init(apiKey, {
+      api_host: config?.apiHost || 'https://app.posthog.com',
+      loaded: (posthog) => {
+        if (process.env.NODE_ENV === 'development') {
+          posthog.opt_out_capturing();
+        }
+      },
+      ...config,
+    });
+    
+    this.initialized = true;
+  }
+
+  identify(userId: string, traits?: Record<string, any>) {
+    posthog.identify(userId, traits);
+  }
+
+  track(event: string, properties?: Record<string, any>) {
+    posthog.capture(event, properties);
+  }
+
+  trackPageView(properties?: Record<string, any>) {
+    posthog.capture('$pageview', properties);
+  }
+
+  setUserProperty(properties: Record<string, any>) {
+    posthog.people.set(properties);
+  }
+
+  trackRevenue(amount: number, properties?: Record<string, any>) {
+    posthog.capture('Revenue', {
+      revenue: amount,
+      ...properties,
+    });
+  }
+
+  startSessionRecording() {
+    posthog.startSessionRecording();
+  }
+
+  stopSessionRecording() {
+    posthog.stopSessionRecording();
+  }
+
+  reset() {
+    posthog.reset();
+  }
+}
+
+// src/shared/services/analytics/providers/sentry.ts
+import * as Sentry from '@sentry/react';
+import { BrowserTracing } from '@sentry/tracing';
+
+export class SentryProvider {
+  initialize(dsn: string, config?: any) {
+    Sentry.init({
+      dsn,
+      integrations: [
+        new BrowserTracing(),
+        new Sentry.Replay({
+          maskAllText: true,
+          blockAllMedia: true,
+        }),
+      ],
+      tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+      replaysSessionSampleRate: 0.1,
+      replaysOnErrorSampleRate: 1.0,
+      environment: process.env.NODE_ENV,
+      ...config,
+    });
+  }
+
+  setUser(user: { id: string; email?: string; username?: string }) {
+    Sentry.setUser(user);
+  }
+
+  captureException(error: Error, context?: Record<string, any>) {
+    Sentry.captureException(error, {
+      contexts: context,
+    });
+  }
+
+  captureMessage(message: string, level: Sentry.SeverityLevel = 'info') {
+    Sentry.captureMessage(message, level);
+  }
+
+  addBreadcrumb(breadcrumb: {
+    message: string;
+    category?: string;
+    level?: Sentry.SeverityLevel;
+    data?: Record<string, any>;
+  }) {
+    Sentry.addBreadcrumb(breadcrumb);
+  }
+
+  setContext(key: string, context: Record<string, any>) {
+    Sentry.setContext(key, context);
+  }
+
+  startTransaction(name: string, op: string) {
+    return Sentry.startTransaction({ name, op });
+  }
+
+  measurePerformance<T>(name: string, fn: () => T): T {
+    const transaction = this.startTransaction(name, 'function');
+    try {
+      const result = fn();
+      transaction.setStatus('ok');
+      return result;
+    } catch (error) {
+      transaction.setStatus('internal_error');
+      throw error;
+    } finally {
+      transaction.finish();
+    }
+  }
+}
+
+// Unified Analytics Service
+// src/shared/services/analytics/unifiedAnalytics.ts
+import { MixpanelProvider } from './providers/mixpanel';
+import { PostHogProvider } from './providers/posthog';
+import { SentryProvider } from './providers/sentry';
+
+interface AnalyticsConfig {
+  mixpanel?: { token: string; config?: any };
+  posthog?: { apiKey: string; config?: any };
+  sentry?: { dsn: string; config?: any };
+}
+
+interface UserTraits {
+  id: string;
+  email?: string;
+  username?: string;
+  plan?: string;
+  createdAt?: string;
+  [key: string]: any;
+}
+
+interface EventProperties {
+  category: string;
+  action: string;
+  label?: string;
+  value?: number;
+  revenue?: number;
+  currency?: string;
+  [key: string]: any;
+}
+
+export class UnifiedAnalytics {
+  private mixpanel?: MixpanelProvider;
+  private posthog?: PostHogProvider;
+  private sentry?: SentryProvider;
+  private userId?: string;
+  private sessionId: string;
+  private isInitialized = false;
+
+  constructor() {
+    this.sessionId = this.generateSessionId();
+  }
+
+  initialize(config: AnalyticsConfig) {
+    if (this.isInitialized) return;
+
+    // Initialize providers
+    if (config.mixpanel) {
+      this.mixpanel = new MixpanelProvider();
+      this.mixpanel.initialize(config.mixpanel.token, config.mixpanel.config);
+    }
+
+    if (config.posthog) {
+      this.posthog = new PostHogProvider();
+      this.posthog.initialize(config.posthog.apiKey, config.posthog.config);
+    }
+
+    if (config.sentry) {
+      this.sentry = new SentryProvider();
+      this.sentry.initialize(config.sentry.dsn, config.sentry.config);
+    }
+
+    this.isInitialized = true;
+    this.setupAutomaticTracking();
+  }
+
+  identify(user: UserTraits) {
+    this.userId = user.id;
+
+    this.mixpanel?.identify(user.id, user);
+    this.posthog?.identify(user.id, user);
+    this.sentry?.setUser({ id: user.id, email: user.email, username: user.username });
+
+    this.track({
+      category: 'User',
+      action: 'identified',
+      label: user.id,
+    });
+  }
+
+  track(event: EventProperties) {
+    const eventName = `${event.category}_${event.action}`;
+    const properties = {
+      ...event,
+      userId: this.userId,
+      sessionId: this.sessionId,
+      timestamp: new Date().toISOString(),
+    };
+
+    this.mixpanel?.track(eventName, properties);
+    this.posthog?.track(eventName, properties);
+    
+    // Add breadcrumb to Sentry
+    this.sentry?.addBreadcrumb({
+      message: eventName,
+      category: event.category,
+      data: properties,
+    });
+
+    // Track revenue if present
+    if (event.revenue) {
+      this.trackRevenue(event.revenue, {
+        currency: event.currency || 'USD',
+        ...event,
+      });
+    }
+  }
+
+  trackPageView(page: string, properties?: Record<string, any>) {
+    const pageProperties = {
+      page,
+      url: window.location.href,
+      referrer: document.referrer,
+      ...properties,
+    };
+
+    this.mixpanel?.track('Page View', pageProperties);
+    this.posthog?.trackPageView(pageProperties);
+  }
+
+  trackError(error: Error, context?: Record<string, any>) {
+    this.sentry?.captureException(error, context);
+    
+    this.track({
+      category: 'Error',
+      action: 'occurred',
+      label: error.message,
+      ...context,
+    });
+  }
+
+  trackPerformance(metric: {
+    name: string;
+    value: number;
+    unit: string;
+  }) {
+    this.track({
+      category: 'Performance',
+      action: 'metric',
+      label: metric.name,
+      value: metric.value,
+      unit: metric.unit,
+    });
+  }
+
+  trackRevenue(amount: number, properties?: Record<string, any>) {
+    this.mixpanel?.trackRevenue(amount, properties);
+    this.posthog?.trackRevenue(amount, properties);
+    
+    this.track({
+      category: 'Revenue',
+      action: 'generated',
+      value: amount,
+      ...properties,
+    });
+  }
+
+  // Feature-specific tracking
+  trackClosetActivity(action: string, item?: any) {
+    this.track({
+      category: 'Closet',
+      action,
+      label: item?.id,
+      itemName: item?.name,
+      itemCategory: item?.category,
+      itemPrice: item?.price,
+    });
+  }
+
+  trackMarketplaceActivity(action: string, listing?: any) {
+    this.track({
+      category: 'Marketplace',
+      action,
+      label: listing?.id,
+      listingTitle: listing?.title,
+      listingPrice: listing?.price,
+      sellerId: listing?.sellerId,
+    });
+  }
+
+  trackChallengeActivity(action: string, challenge?: any) {
+    this.track({
+      category: 'Challenge',
+      action,
+      label: challenge?.id,
+      challengeTitle: challenge?.title,
+      challengeType: challenge?.category,
+    });
+  }
+
+  startSession() {
+    this.sessionId = this.generateSessionId();
+    this.posthog?.startSessionRecording();
+  }
+
+  endSession() {
+    this.posthog?.stopSessionRecording();
+    this.reset();
+  }
+
+  reset() {
+    this.userId = undefined;
+    this.mixpanel?.reset();
+    this.posthog?.reset();
+  }
+
+  private generateSessionId(): string {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  private setupAutomaticTracking() {
+    // Track page views on route change
+    if (typeof window !== 'undefined') {
+      let lastPath = window.location.pathname;
+      
+      const trackPageChange = () => {
+        if (window.location.pathname !== lastPath) {
+          lastPath = window.location.pathname;
+          this.trackPageView(lastPath);
+        }
+      };
+
+      // Listen for route changes
+      window.addEventListener('popstate', trackPageChange);
+      
+      // Override pushState and replaceState
+      const originalPushState = history.pushState;
+      const originalReplaceState = history.replaceState;
+      
+      history.pushState = function(...args) {
+        originalPushState.apply(history, args);
+        trackPageChange();
+      };
+      
+      history.replaceState = function(...args) {
+        originalReplaceState.apply(history, args);
+        trackPageChange();
+      };
+    }
+
+    // Track clicks
+    document.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement;
+      const trackableElement = target.closest('[data-track]');
+      
+      if (trackableElement) {
+        const trackData = trackableElement.getAttribute('data-track');
+        if (trackData) {
+          try {
+            const { category, action, label, value } = JSON.parse(trackData);
+            this.track({ category, action, label, value });
+          } catch (error) {
+            console.error('Invalid tracking data:', trackData);
+          }
+        }
+      }
+    });
+
+    // Track form submissions
+    document.addEventListener('submit', (event) => {
+      const form = event.target as HTMLFormElement;
+      const formName = form.getAttribute('name') || form.id || 'unnamed_form';
+      
+      this.track({
+        category: 'Form',
+        action: 'submit',
+        label: formName,
+      });
+    });
+  }
+}
+
+export const analytics = new UnifiedAnalytics();
+
+// React Analytics Provider
+// src/app/providers/AnalyticsProvider.tsx
+import React, { useEffect } from 'react';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { analytics } from '@/shared/services/analytics/unifiedAnalytics';
+
+interface AnalyticsProviderProps {
+  children: React.ReactNode;
+}
+
+export const AnalyticsProvider: React.FC<AnalyticsProviderProps> = ({ children }) => {
+  const user = useAuthStore(state => state.user);
+
+  useEffect(() => {
+    // Initialize analytics
+    analytics.initialize({
+      mixpanel: {
+        token: import.meta.env.VITE_MIXPANEL_TOKEN,
+      },
+      posthog: {
+        apiKey: import.meta.env.VITE_POSTHOG_KEY,
+      },
+      sentry: {
+        dsn: import.meta.env.VITE_SENTRY_DSN,
+      },
+    });
+  }, []);
+
+  useEffect(() => {
+    // Identify user when authenticated
+    if (user) {
+      analytics.identify({
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        createdAt: user.createdAt,
+      });
+    } else {
+      analytics.reset();
+    }
+  }, [user]);
+
+  return <>{children}</>;
+};
+
+// ===== TESTING STRATEGY =====
+// Unit Tests
+// src/shared/components/ui/Button/__tests__/Button.test.tsx
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { Button } from '../Button';
+
+describe('Button', () => {
+  it('renders with text', () => {
+    render(<Button>Click me</Button>);
+    expect(screen.getByText('Click me')).toBeInTheDocument();
+  });
+
+  it('handles click events', () => {
+    const handleClick = vi.fn();
+    render(<Button onClick={handleClick}>Click me</Button>);
+    
+    fireEvent.click(screen.getByText('Click me'));
+    expect(handleClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows loading state', () => {
+    render(<Button isLoading>Loading</Button>);
+    expect(screen.getByText('Loading')).toBeInTheDocument();
+    expect(screen.getByRole('button')).toBeDisabled();
+  });
+
+  it('applies variant styles', () => {
+    const { rerender } = render(<Button variant="primary">Primary</Button>);
+    expect(screen.getByRole('button')).toHaveClass('bg-black');
+    
+    rerender(<Button variant="secondary">Secondary</Button>);
+    expect(screen.getByRole('button')).toHaveClass('bg-white');
+  });
+
+  it('renders with icons', () => {
+    const leftIcon = <span data-testid="left-icon">←</span>;
+    const rightIcon = <span data-testid="right-icon">→</span>;
+    
+    render(
+      <Button leftIcon={leftIcon} rightIcon={rightIcon}>
+        With Icons
+      </Button>
+    );
+    
+    expect(screen.getByTestId('left-icon')).toBeInTheDocument();
+    expect(screen.getByTestId('right-icon')).toBeInTheDocument();
+  });
+});
+
+// Integration Tests
+// src/features/closet/__tests__/ClosetFlow.integration.test.tsx
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { TestWrapper } from '@/tests/utils/TestWrapper';
+import ClosetPage from '../pages/ClosetPage';
+import { closetApi } from '../api/closet.api';
+
+vi.mock('../api/closet.api');
+
+describe('Closet Flow Integration', () => {
+  const user = userEvent.setup();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('completes full add item flow', async () => {
+    // Mock API responses
+    vi.mocked(closetApi.getItems).mockResolvedValue({
+      data: [],
+      meta: { page: 1, totalPages: 1, total: 0, limit: 50 },
+    });
+
+    vi.mocked(closetApi.createItem).mockResolvedValue({
+      id: '1',
+      name: 'Test Shirt',
+      category: 'tops',
+      // ... other properties
+    });
+
+    render(<ClosetPage />, { wrapper: TestWrapper });
+
+    // Click add item button
+    const addButton = screen.getByText('Add Item');
+    await user.click(addButton);
+
+    // Fill out form
+    await user.type(screen.getByLabelText('Name'), 'Test Shirt');
+    await user.selectOptions(screen.getByLabelText('Category'), 'tops');
+    await user.type(screen.getByLabelText('Brand'), 'Test Brand');
+    await user.type(screen.getByLabelText('Price'), '29.99');
+
+    // Submit form
+    await user.click(screen.getByText('Save Item'));
+
+    // Verify API was called
+    await waitFor(() => {
+      expect(closetApi.createItem).toHaveBeenCalled();
+    });
+
+    // Verify success message
+    expect(screen.getByText('Item added successfully')).toBeInTheDocument();
+  });
+
+  it('handles search and filter', async () => {
+    const mockItems = [
+      { id: '1', name: 'Red Shirt', category: 'tops' },
+      { id: '2', name: 'Blue Jeans', category: 'bottoms' },
+    ];
+
+    vi.mocked(closetApi.getItems).mockResolvedValue({
+      data: mockItems,
+      meta: { page: 1, totalPages: 1, total: 2, limit: 50 },
+    });
+
+    render(<ClosetPage />, { wrapper: TestWrapper });
+
+    // Wait for initial load
+    await waitFor(() => {
+      expect(screen.getByText('Red Shirt')).toBeInTheDocument();
+    });
+
+    // Search
+    const searchInput = screen.getByPlaceholderText('Search items...');
+    await user.type(searchInput, 'shirt');
+
+    // Filter by category
+    const categoryFilter = screen.getByLabelText('Category');
+    await user.selectOptions(categoryFilter, 'tops');
+
+    // Verify API was called with filters
+    await waitFor(() => {
+      expect(closetApi.getItems).toHaveBeenCalledWith(
+        expect.objectContaining({
+          search: 'shirt',
+          category: 'tops',
+        })
+      );
+    });
+  });
+});
+
+// E2E Test Setup
+// e2e/closet.spec.ts
+import { test, expect } from '@playwright/test';
+
+test.describe('Closet E2E', () => {
+  test.beforeEach(async ({ page }) => {
+    // Login
+    await page.goto('/login');
+    await page.fill('[name="email"]', 'test@example.com');
+    await page.fill('[name="password"]', 'password123');
+    await page.click('button:has-text("Sign In")');
+    
+    // Wait for redirect
+    await page.waitForURL('/closet');
+  });
+
+  test('adds new item to closet', async ({ page }) => {
+    // Click add item
+    await page.click('text=Add Item');
+    
+    // Fill form
+    await page.fill('[name="name"]', 'E2E Test Shirt');
+    await page.selectOption('[name="category"]', 'tops');
+    await page.fill('[name="brand"]', 'Test Brand');
+    await page.fill('[name="price"]', '49.99');
+    
+    // Upload image
+    const fileInput = page.locator('input[type="file"]');
+    await fileInput.setInputFiles('tests/fixtures/test-image.jpg');
+    
+    // Submit
+    await page.click('button:has-text("Save Item")');
+    
+    // Verify success
+    await expect(page.locator('text=Item added successfully')).toBeVisible();
+    await expect(page.locator('text=E2E Test Shirt')).toBeVisible();
+  });
+
+  test('filters and searches items', async ({ page }) => {
+    // Search
+    await page.fill('[placeholder="Search items..."]', 'shirt');
+    await page.waitForTimeout(500); // Debounce
+    
+    // Filter by category
+    await page.selectOption('[aria-label="Category filter"]', 'tops');
+    
+    // Verify results
+    await expect(page.locator('[data-testid="item-card"]')).toHaveCount(3);
+    
+    // Clear filters
+    await page.click('text=Clear Filters');
+    await expect(page.locator('[data-testid="item-card"]')).toHaveCount(10);
+  });
+
+  test('virtual scrolling performance', async ({ page }) => {
+    // Navigate to closet with many items
+    await page.goto('/closet?test=large-dataset');
+    
+    // Measure initial load time
+    const startTime = Date.now();
+    await page.waitForSelector('[data-testid="item-card"]');
+    const loadTime = Date.now() - startTime;
+    
+    expect(loadTime).toBeLessThan(1000); // Should load in under 1 second
+    
+    // Scroll performance
+    const scrollStartTime = Date.now();
+    await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+    await page.waitForTimeout(100);
+    const scrollTime = Date.now() - scrollStartTime;
+    
+    expect(scrollTime).toBeLessThan(200); // Smooth scrolling
+  });
+});
+
+// Accessibility Testing
+// src/shared/components/ui/__tests__/accessibility.test.tsx
+import { render } from '@testing-library/react';
+import { axe } from 'jest-axe';
+import { Button } from '../Button';
+import { Input } from '../Input';
+import { Select } from '../Select';
+
+describe('Accessibility', () => {
+  it('Button has no accessibility violations', async () => {
+    const { container } = render(<Button>Click me</Button>);
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('Input has proper labels and ARIA', async () => {
+    const { container } = render(
+      <div>
+        <label htmlFor="test-input">Test Input</label>
+        <Input id="test-input" aria-describedby="error" />
+        <span id="error">Error message</span>
+      </div>
+    );
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('Select is keyboard navigable', async () => {
+    const { container } = render(
+      <Select
+        options={[
+          { value: '1', label: 'Option 1' },
+          { value: '2', label: 'Option 2' },
+        ]}
+        aria-label="Test select"
+      />
+    );
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  });
+});
+
+// Performance Testing
+// src/tests/performance/virtualScroll.perf.test.tsx
+import { render } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { VirtualGrid } from '@/shared/components/ui/VirtualGrid';
+
+describe('Virtual Scroll Performance', () => {
+  it('renders large dataset efficiently', () => {
+    const items = Array.from({ length: 10000 }, (_, i) => ({
+      id: `item-${i}`,
+      name: `Item ${i}`,
+    }));
+
+    const startTime = performance.now();
+    
+    render(
+      <VirtualGrid
+        items={items}
+        renderItem={(item) => <div key={item.id}>{item.name}</div>}
+        columnCount={4}
+        rowHeight={200}
+      />
+    );
+    
+    const renderTime = performance.now() - startTime;
+    
+    // Should render in under 100ms even with 10k items
+    expect(renderTime).toBeLessThan(100);
+  });
+});
+
+// Test utilities
+// src/tests/utils/TestWrapper.tsx
+import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter } from 'react-router-dom';
+import { I18nextProvider } from 'react-i18next';
+import i18n from '@/shared/services/i18n/config';
+
+const createTestQueryClient = () => new QueryClient({
+  defaultOptions: {
+    queries: { retry: false },
+    mutations: { retry: false },
+  },
+});
+
+export const TestWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const testQueryClient = createTestQueryClient();
+  
+  return (
+    <QueryClientProvider client={testQueryClient}>
+      <I18nextProvider i18n={i18n}>
+        <BrowserRouter>
+          {children}
+        </BrowserRouter>
+      </I18nextProvider>
+    </QueryClientProvider>
+  );
+};
+
+// Custom render function
+export function renderWithProviders(ui: React.ReactElement, options = {}) {
+  return render(ui, { wrapper: TestWrapper, ...options });
+}
