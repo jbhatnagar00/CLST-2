@@ -1,0 +1,37 @@
+# CLST Digital Closet Application - Project Context
+
+## Project Overview
+You are helping build CLST, a modern fashion/closet management platform with:
+- Digital closet management (plus the Create Outfit feature and Weekly Plan based on the weather at the user's location feature)
+- Fashion marketplace
+- Style challenges
+- Trend tracking (Articles, trending styles, trending colors)
+- Social features
+
+## Technical Stack
+- React 18+ with TypeScript
+- Vite for build tooling
+- Zustand for state management
+- React Query for server state
+- React Router v6 for routing
+- Tailwind CSS for styling
+- Vitest for testing
+- i18n for internationalization
+
+## Architecture Requirements
+- Feature-based folder structure
+- Zero technical debt approach
+- Mobile-first responsive design
+- Offline-first with advanced caching
+- Virtual scrolling for large lists
+- Comprehensive analytics
+- WCAG AAA accessibility (only black and white colors used)
+- Sub-second load times
+
+## Code Standards
+- 100% TypeScript coverage
+- Functional components with hooks
+- Custom hooks for business logic
+- Comprehensive error boundaries
+- Optimistic UI updates
+- Progressive enhancement
