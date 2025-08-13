@@ -1,0 +1,388 @@
+// src/shared/components/ui/Button/Button.tsx
+import React, { forwardRef } from 'react';
+import { cn } from '@/shared/utils/cn';
+
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  size?: 'sm' | 'md' | 'lg';
+  isLoading?: boolean;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
+}
+
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ 
+    children, 
+    variant = 'primary', 
+    size = 'md', 
+    isLoading = false,
+    leftIcon,
+    rightIcon,
+    className,
+    disabled,
+    ...props 
+  }, ref) => {
+    const baseStyles = 'inline-flex items-center justify-center font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+    
+    const variants = {
+      primary: 'bg-black text-white hover:bg-gray-800 focus:ring-black',
+      secondary: 'bg-white text-black border-2 border-black hover:bg-gray-100 focus:ring-black',
+      ghost: 'bg-transparent hover:bg-gray-100 focus:ring-black',
+      danger: 'bg-black text-white hover:bg-gray-900 focus:ring-red-500',
+    };
+    
+    const sizes = {
+      sm: 'h-8 px-3 text-sm',
+      md: 'h-10 px-4 text-base',
+      lg: 'h-12 px-6 text-lg',
+    };
+
+    return (
+      <button
+        ref={ref}
+        className={cn(
+          baseStyles,
+          variants[variant],
+          sizes[size],
+          className
+        )}
+        disabled={disabled || isLoading}
+        {...props}
+      >
+        {isLoading ? (
+          <span className="mr-2">
+            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          </span>
+        ) : leftIcon ? (
+          <span className="mr-2">{leftIcon}</span>
+        ) : null}
+        {children}
+        {rightIcon && <span className="ml-2">{rightIcon}</span>}
+      </button>
+    );
+  }
+);
+
+Button.displayName = 'Button';
+
+// src/shared/components/ui/Card/Card.tsx
+import React from 'react';
+import { cn } from '@/shared/utils/cn';
+
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  variant?: 'elevated' | 'outlined' | 'filled';
+  padding?: 'none' | 'sm' | 'md' | 'lg';
+}
+
+export const Card: React.FC<CardProps> = ({
+  children,
+  variant = 'outlined',
+  padding = 'md',
+  className,
+  ...props
+}) => {
+  const baseStyles = 'bg-white rounded-lg';
+  
+  const variants = {
+    elevated: 'shadow-lg',
+    outlined: 'border-2 border-black',
+    filled: 'bg-gray-50',
+  };
+  
+  const paddings = {
+    none: '',
+    sm: 'p-3',
+    md: 'p-4',
+    lg: 'p-6',
+  };
+
+  return (
+    <div
+      className={cn(
+        baseStyles,
+        variants[variant],
+        paddings[padding],
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+};
+
+// src/shared/components/ui/VirtualList/VirtualList.tsx
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+
+export interface VirtualListProps<T> {
+  items: T[];
+  height: number;
+  itemHeight: number | ((index: number) => number);
+  renderItem: (item: T, index: number) => React.ReactNode;
+  overscan?: number;
+  className?: string;
+  onEndReached?: () => void;
+  endReachedThreshold?: number;
+}
+
+export function VirtualList<T>({
+  items,
+  height,
+  itemHeight,
+  renderItem,
+  overscan = 5,
+  className,
+  onEndReached,
+  endReachedThreshold = 0.8,
+}: VirtualListProps<T>) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const [hasReachedEnd, setHasReachedEnd] = useState(false);
+
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: typeof itemHeight === 'function' ? itemHeight : () => itemHeight,
+    overscan,
+  });
+
+  const handleScroll = useCallback(() => {
+    if (!parentRef.current || !onEndReached || hasReachedEnd) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
+    const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+
+    if (scrollPercentage > endReachedThreshold) {
+      setHasReachedEnd(true);
+      onEndReached();
+    }
+  }, [onEndReached, endReachedThreshold, hasReachedEnd]);
+
+  useEffect(() => {
+    setHasReachedEnd(false);
+  }, [items.length]);
+
+  return (
+    <div
+      ref={parentRef}
+      className={cn('overflow-auto', className)}
+      style={{ height }}
+      onScroll={handleScroll}
+    >
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        {virtualizer.getVirtualItems().map((virtualItem) => (
+          <div
+            key={virtualItem.key}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: `${virtualItem.size}px`,
+              transform: `translateY(${virtualItem.start}px)`,
+            }}
+          >
+            {renderItem(items[virtualItem.index], virtualItem.index)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// src/shared/components/feedback/ErrorBoundary/ErrorBoundary.tsx
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Button } from '@/shared/components/ui/Button';
+
+interface Props {
+  children: ReactNode;
+  fallback?: (error: Error, reset: () => void) => ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+  error: Error | null;
+}
+
+export class ErrorBoundary extends Component<Props, State> {
+  public state: State = {
+    hasError: false,
+    error: null,
+  };
+
+  public static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Uncaught error:', error, errorInfo);
+    // Send to analytics service
+  }
+
+  private reset = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  public render() {
+    if (this.state.hasError && this.state.error) {
+      if (this.props.fallback) {
+        return this.props.fallback(this.state.error, this.reset);
+      }
+
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <div className="max-w-md w-full text-center">
+            <h1 className="text-2xl font-bold mb-4">Oops! Something went wrong</h1>
+            <p className="text-gray-600 mb-6">
+              We're sorry for the inconvenience. Please try refreshing the page.
+            </p>
+            <Button onClick={this.reset} variant="primary">
+              Try Again
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// src/shared/components/feedback/Loading/Loading.tsx
+import React from 'react';
+import { cn } from '@/shared/utils/cn';
+
+export interface LoadingProps {
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+  label?: string;
+}
+
+export const Loading: React.FC<LoadingProps> = ({ 
+  size = 'md', 
+  className,
+  label = 'Loading...'
+}) => {
+  const sizes = {
+    sm: 'h-4 w-4',
+    md: 'h-8 w-8',
+    lg: 'h-12 w-12',
+  };
+
+  return (
+    <div className={cn('flex flex-col items-center justify-center', className)}>
+      <svg 
+        className={cn('animate-spin', sizes[size])} 
+        fill="none" 
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <circle 
+          className="opacity-25" 
+          cx="12" 
+          cy="12" 
+          r="10" 
+          stroke="currentColor" 
+          strokeWidth="4" 
+        />
+        <path 
+          className="opacity-75" 
+          fill="currentColor" 
+          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" 
+        />
+      </svg>
+      {label && (
+        <span className="sr-only">{label}</span>
+      )}
+    </div>
+  );
+};
+
+// src/shared/components/layout/Header/Header.tsx
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { Button } from '@/shared/components/ui/Button';
+
+export const Header: React.FC = () => {
+  const { t } = useTranslation();
+  const { user, logout } = useAuthStore();
+
+  return (
+    <header className="sticky top-0 z-50 bg-white border-b-2 border-black">
+      <div className="container mx-auto px-4">
+        <div className="flex items-center justify-between h-16">
+          <Link to="/" className="text-2xl font-bold">
+            CLST
+          </Link>
+
+          <nav className="hidden md:flex items-center space-x-6">
+            <Link to="/closet" className="hover:underline">
+              {t('nav.closet')}
+            </Link>
+            <Link to="/outfits" className="hover:underline">
+              {t('nav.outfits')}
+            </Link>
+            <Link to="/marketplace" className="hover:underline">
+              {t('nav.marketplace')}
+            </Link>
+            <Link to="/challenges" className="hover:underline">
+              {t('nav.challenges')}
+            </Link>
+            <Link to="/trends" className="hover:underline">
+              {t('nav.trends')}
+            </Link>
+          </nav>
+
+          <div className="flex items-center space-x-4">
+            {user ? (
+              <>
+                <Link to="/profile">
+                  <img
+                    src={user.profile.avatar || '/default-avatar.png'}
+                    alt={user.username}
+                    className="w-8 h-8 rounded-full border-2 border-black"
+                  />
+                </Link>
+                <Button variant="ghost" size="sm" onClick={logout}>
+                  {t('auth.logout')}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="ghost" size="sm">
+                    {t('auth.login')}
+                  </Button>
+                </Link>
+                <Link to="/signup">
+                  <Button variant="primary" size="sm">
+                    {t('auth.signup')}
+                  </Button>
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};
+
+// src/shared/utils/cn.ts
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
