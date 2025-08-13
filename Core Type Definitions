@@ -1,0 +1,387 @@
+// src/shared/types/common.types.ts
+
+export type ID = string;
+export type Timestamp = string; // ISO 8601
+
+export interface BaseEntity {
+  id: ID;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface PaginationParams {
+  page: number;
+  limit: number;
+  sort?: string;
+  order?: 'asc' | 'desc';
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface ApiError {
+  code: string;
+  message: string;
+  details?: Record<string, any>;
+}
+
+export type LoadingState = 'idle' | 'loading' | 'success' | 'error';
+
+// src/shared/types/user.types.ts
+
+export interface User extends BaseEntity {
+  email: string;
+  username: string;
+  profile: UserProfile;
+  preferences: UserPreferences;
+  stats: UserStats;
+}
+
+export interface UserProfile {
+  firstName: string;
+  lastName: string;
+  avatar?: string;
+  bio?: string;
+  location?: Location;
+  bodyMeasurements?: BodyMeasurements;
+}
+
+export interface Location {
+  city: string;
+  country: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+}
+
+export interface BodyMeasurements {
+  height?: number; // in cm
+  weight?: number; // in kg
+  chest?: number;
+  waist?: number;
+  hips?: number;
+  shoeSize?: string;
+}
+
+export interface UserPreferences {
+  language: string;
+  currency: string;
+  units: 'metric' | 'imperial';
+  notifications: NotificationPreferences;
+  privacy: PrivacySettings;
+}
+
+export interface NotificationPreferences {
+  email: boolean;
+  push: boolean;
+  sms: boolean;
+  marketing: boolean;
+  challenges: boolean;
+  marketplace: boolean;
+}
+
+export interface PrivacySettings {
+  profileVisibility: 'public' | 'friends' | 'private';
+  closetVisibility: 'public' | 'friends' | 'private';
+  showLocation: boolean;
+}
+
+export interface UserStats {
+  itemsCount: number;
+  outfitsCount: number;
+  followersCount: number;
+  followingCount: number;
+  challengesWon: number;
+}
+
+// src/features/closet/types/closet.types.ts
+
+export type ClothingCategory = 
+  | 'tops'
+  | 'bottoms'
+  | 'dresses'
+  | 'outerwear'
+  | 'shoes'
+  | 'accessories'
+  | 'underwear'
+  | 'activewear'
+  | 'swimwear'
+  | 'other';
+
+export type ClothingSubcategory = {
+  tops: 't-shirt' | 'shirt' | 'blouse' | 'sweater' | 'hoodie' | 'tank-top' | 'polo';
+  bottoms: 'jeans' | 'pants' | 'shorts' | 'skirt' | 'leggings';
+  dresses: 'casual' | 'formal' | 'maxi' | 'mini' | 'midi';
+  outerwear: 'jacket' | 'coat' | 'blazer' | 'vest';
+  shoes: 'sneakers' | 'boots' | 'heels' | 'flats' | 'sandals' | 'loafers';
+  accessories: 'bag' | 'belt' | 'hat' | 'scarf' | 'jewelry' | 'watch' | 'sunglasses';
+  underwear: 'bra' | 'panties' | 'boxers' | 'socks';
+  activewear: 'sports-bra' | 'leggings' | 'shorts' | 'tank' | 'jacket';
+  swimwear: 'bikini' | 'one-piece' | 'trunks' | 'cover-up';
+  other: 'other';
+};
+
+export type Season = 'spring' | 'summer' | 'fall' | 'winter' | 'all-season';
+export type Occasion = 'casual' | 'work' | 'formal' | 'party' | 'sport' | 'beach' | 'date' | 'other';
+
+export interface ClothingItem extends BaseEntity {
+  userId: ID;
+  name: string;
+  category: ClothingCategory;
+  subcategory: string;
+  brand?: string;
+  color: Color[];
+  size?: string;
+  material?: string[];
+  careInstructions?: string[];
+  price?: number;
+  purchaseDate?: Timestamp;
+  images: ItemImage[];
+  tags: string[];
+  seasons: Season[];
+  occasions: Occasion[];
+  wearCount: number;
+  lastWorn?: Timestamp;
+  notes?: string;
+  isAvailable: boolean;
+  condition: 'new' | 'excellent' | 'good' | 'fair' | 'poor';
+}
+
+export interface Color {
+  name: string;
+  hex: string;
+  isPrimary: boolean;
+}
+
+export interface ItemImage {
+  id: ID;
+  url: string;
+  thumbnailUrl: string;
+  isPrimary: boolean;
+  alt?: string;
+}
+
+// src/features/outfits/types/outfit.types.ts
+
+export interface Outfit extends BaseEntity {
+  userId: ID;
+  name: string;
+  items: OutfitItem[];
+  occasions: Occasion[];
+  seasons: Season[];
+  weather?: WeatherCondition[];
+  rating?: number;
+  wearCount: number;
+  lastWorn?: Timestamp;
+  notes?: string;
+  images?: string[];
+  tags: string[];
+}
+
+export interface OutfitItem {
+  itemId: ID;
+  category: ClothingCategory;
+  layerOrder?: number;
+}
+
+export type WeatherCondition = 'sunny' | 'cloudy' | 'rainy' | 'snowy' | 'windy' | 'hot' | 'cold' | 'mild';
+
+export interface WeeklyPlan extends BaseEntity {
+  userId: ID;
+  weekStartDate: Timestamp;
+  plans: DailyPlan[];
+}
+
+export interface DailyPlan {
+  date: Timestamp;
+  outfits: PlannedOutfit[];
+  weather?: WeatherForecast;
+  notes?: string;
+}
+
+export interface PlannedOutfit {
+  outfitId: ID;
+  time: 'morning' | 'afternoon' | 'evening';
+  occasion: Occasion;
+  isCompleted: boolean;
+}
+
+export interface WeatherForecast {
+  temp: {
+    min: number;
+    max: number;
+  };
+  condition: WeatherCondition;
+  precipitation: number;
+  windSpeed: number;
+}
+
+// src/features/marketplace/types/marketplace.types.ts
+
+export interface Listing extends BaseEntity {
+  sellerId: ID;
+  item: ClothingItem;
+  title: string;
+  description: string;
+  price: number;
+  originalPrice?: number;
+  condition: 'new-with-tags' | 'new-without-tags' | 'excellent' | 'good' | 'fair';
+  size: string;
+  measurements?: ItemMeasurements;
+  shipping: ShippingOptions;
+  status: 'active' | 'sold' | 'reserved' | 'expired';
+  views: number;
+  likes: number;
+  offers: Offer[];
+}
+
+export interface ItemMeasurements {
+  chest?: number;
+  waist?: number;
+  hips?: number;
+  length?: number;
+  shoulders?: number;
+  sleeves?: number;
+  inseam?: number;
+}
+
+export interface ShippingOptions {
+  domestic: ShippingMethod;
+  international?: ShippingMethod;
+  handDelivery: boolean;
+}
+
+export interface ShippingMethod {
+  available: boolean;
+  price: number;
+  estimatedDays: number;
+}
+
+export interface Offer extends BaseEntity {
+  buyerId: ID;
+  listingId: ID;
+  amount: number;
+  message?: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'expired';
+}
+
+// src/features/challenges/types/challenge.types.ts
+
+export interface Challenge extends BaseEntity {
+  title: string;
+  description: string;
+  rules: string[];
+  startDate: Timestamp;
+  endDate: Timestamp;
+  category: ChallengeCategory;
+  difficulty: 'easy' | 'medium' | 'hard';
+  prizes: Prize[];
+  participants: Participant[];
+  submissions: Submission[];
+  status: 'upcoming' | 'active' | 'completed';
+  coverImage: string;
+  tags: string[];
+}
+
+export type ChallengeCategory = 
+  | 'style-mix'
+  | 'color-coordination'
+  | 'thrift-flip'
+  | 'seasonal'
+  | 'sustainable'
+  | 'brand-specific'
+  | 'decade-theme'
+  | 'budget-style';
+
+export interface Prize {
+  rank: number;
+  description: string;
+  value?: number;
+  sponsor?: string;
+}
+
+export interface Participant {
+  userId: ID;
+  joinedAt: Timestamp;
+  submissionId?: ID;
+}
+
+export interface Submission extends BaseEntity {
+  challengeId: ID;
+  userId: ID;
+  images: string[];
+  description: string;
+  outfitItems: ID[];
+  votes: number;
+  comments: Comment[];
+}
+
+export interface Comment extends BaseEntity {
+  userId: ID;
+  text: string;
+  likes: number;
+}
+
+// src/features/trends/types/trend.types.ts
+
+export interface Trend extends BaseEntity {
+  name: string;
+  category: TrendCategory;
+  description: string;
+  popularity: number; // 0-100
+  growthRate: number; // percentage
+  peakSeason?: Season;
+  relatedColors: Color[];
+  relatedItems: ID[];
+  articles: ID[];
+  hashtags: string[];
+}
+
+export type TrendCategory = 
+  | 'style'
+  | 'color'
+  | 'pattern'
+  | 'material'
+  | 'brand'
+  | 'occasion'
+  | 'aesthetic';
+
+export interface Article extends BaseEntity {
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  author: Author;
+  coverImage: string;
+  images: string[];
+  category: ArticleCategory;
+  tags: string[];
+  readTime: number; // minutes
+  views: number;
+  likes: number;
+  comments: Comment[];
+  relatedTrends: ID[];
+}
+
+export interface Author {
+  id: ID;
+  name: string;
+  avatar: string;
+  bio?: string;
+}
+
+export type ArticleCategory = 
+  | 'trend-report'
+  | 'style-guide'
+  | 'how-to'
+  | 'interview'
+  | 'sustainability'
+  | 'brand-spotlight';
