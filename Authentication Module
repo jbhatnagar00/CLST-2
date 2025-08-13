@@ -1,0 +1,884 @@
+// src/features/auth/types/auth.types.ts
+export interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
+export interface SignupData {
+  email: string;
+  password: string;
+  confirmPassword: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  acceptTerms: boolean;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+}
+
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetConfirm {
+  token: string;
+  password: string;
+  confirmPassword: string;
+}
+
+export interface EmailVerification {
+  token: string;
+}
+
+export interface AuthError {
+  code: string;
+  message: string;
+  field?: string;
+}
+
+// src/features/auth/api/auth.api.ts
+import { apiClient } from '@/shared/services/api/ApiClient';
+import type { User } from '@/shared/types';
+import type {
+  LoginCredentials,
+  SignupData,
+  AuthTokens,
+  PasswordResetRequest,
+  PasswordResetConfirm,
+  EmailVerification,
+} from '../types';
+
+export const authApi = {
+  login: async (credentials: LoginCredentials): Promise<{ user: User; tokens: AuthTokens }> => {
+    return apiClient.post('/auth/login', credentials);
+  },
+
+  signup: async (data: SignupData): Promise<{ user: User; tokens: AuthTokens }> => {
+    return apiClient.post('/auth/signup', data);
+  },
+
+  logout: async (): Promise<void> => {
+    return apiClient.post('/auth/logout');
+  },
+
+  refreshToken: async (refreshToken: string): Promise<AuthTokens> => {
+    return apiClient.post('/auth/refresh', { refreshToken });
+  },
+
+  verifyEmail: async (data: EmailVerification): Promise<{ message: string }> => {
+    return apiClient.post('/auth/verify-email', data);
+  },
+
+  resendVerification: async (): Promise<{ message: string }> => {
+    return apiClient.post('/auth/resend-verification');
+  },
+
+  requestPasswordReset: async (data: PasswordResetRequest): Promise<{ message: string }> => {
+    return apiClient.post('/auth/password-reset/request', data);
+  },
+
+  confirmPasswordReset: async (data: PasswordResetConfirm): Promise<{ message: string }> => {
+    return apiClient.post('/auth/password-reset/confirm', data);
+  },
+
+  getCurrentUser: async (): Promise<User> => {
+    return apiClient.get('/auth/me');
+  },
+};
+
+// src/features/auth/stores/auth.store.ts (Enhanced version)
+import { create } from 'zustand';
+import { devtools, persist } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+import type { User } from '@/shared/types';
+import type { LoginCredentials, SignupData, AuthTokens } from '../types';
+import { authApi } from '../api/auth.api';
+import { CONSTANTS } from '@/shared/utils/constants';
+
+interface AuthState {
+  // State
+  user: User | null;
+  tokens: AuthTokens | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  isEmailVerified: boolean;
+  error: string | null;
+
+  // Actions
+  login: (credentials: LoginCredentials) => Promise<void>;
+  signup: (data: SignupData) => Promise<void>;
+  logout: () => Promise<void>;
+  refreshAuth: () => Promise<void>;
+  verifyEmail: (token: string) => Promise<void>;
+  resendVerification: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  confirmPasswordReset: (token: string, password: string, confirmPassword: string) => Promise<void>;
+  updateProfile: (updates: Partial<User>) => void;
+  clearError: () => void;
+
+  // Token management
+  getAccessToken: () => string | null;
+  isTokenExpired: () => boolean;
+}
+
+export const useAuthStore = create<AuthState>()(
+  devtools(
+    persist(
+      immer((set, get) => ({
+        // Initial State
+        user: null,
+        tokens: null,
+        isAuthenticated: false,
+        isLoading: false,
+        isEmailVerified: false,
+        error: null,
+
+        // Actions
+        login: async (credentials) => {
+          set((state) => {
+            state.isLoading = true;
+            state.error = null;
+          });
+
+          try {
+            const { user, tokens } = await authApi.login(credentials);
+            
+            // Store tokens
+            localStorage.setItem(CONSTANTS.STORAGE_KEYS.AUTH_TOKEN, tokens.accessToken);
+            
+            set((state) => {
+              state.user = user;
+              state.tokens = tokens;
+              state.isAuthenticated = true;
+              state.isEmailVerified = user.emailVerified || false;
+              state.isLoading = false;
+            });
+
+            // Set up token refresh
+            get().scheduleTokenRefresh();
+          } catch (error: any) {
+            set((state) => {
+              state.error = error.message || 'Login failed';
+              state.isLoading = false;
+            });
+            throw error;
+          }
+        },
+
+        signup: async (data) => {
+          set((state) => {
+            state.isLoading = true;
+            state.error = null;
+          });
+
+          try {
+            const { user, tokens } = await authApi.signup(data);
+            
+            localStorage.setItem(CONSTANTS.STORAGE_KEYS.AUTH_TOKEN, tokens.accessToken);
+            
+            set((state) => {
+              state.user = user;
+              state.tokens = tokens;
+              state.isAuthenticated = true;
+              state.isEmailVerified = false;
+              state.isLoading = false;
+            });
+
+            get().scheduleTokenRefresh();
+          } catch (error: any) {
+            set((state) => {
+              state.error = error.message || 'Signup failed';
+              state.isLoading = false;
+            });
+            throw error;
+          }
+        },
+
+        logout: async () => {
+          try {
+            await authApi.logout();
+          } catch (error) {
+            console.error('Logout error:', error);
+          } finally {
+            localStorage.removeItem(CONSTANTS.STORAGE_KEYS.AUTH_TOKEN);
+            
+            set((state) => {
+              state.user = null;
+              state.tokens = null;
+              state.isAuthenticated = false;
+              state.isEmailVerified = false;
+              state.error = null;
+            });
+          }
+        },
+
+        refreshAuth: async () => {
+          const { tokens } = get();
+          if (!tokens?.refreshToken) return;
+
+          try {
+            const newTokens = await authApi.refreshToken(tokens.refreshToken);
+            
+            localStorage.setItem(CONSTANTS.STORAGE_KEYS.AUTH_TOKEN, newTokens.accessToken);
+            
+            set((state) => {
+              state.tokens = newTokens;
+            });
+
+            get().scheduleTokenRefresh();
+          } catch (error) {
+            get().logout();
+          }
+        },
+
+        verifyEmail: async (token) => {
+          set((state) => {
+            state.isLoading = true;
+            state.error = null;
+          });
+
+          try {
+            await authApi.verifyEmail({ token });
+            
+            set((state) => {
+              state.isEmailVerified = true;
+              if (state.user) {
+                state.user.emailVerified = true;
+              }
+              state.isLoading = false;
+            });
+          } catch (error: any) {
+            set((state) => {
+              state.error = error.message || 'Email verification failed';
+              state.isLoading = false;
+            });
+            throw error;
+          }
+        },
+
+        resendVerification: async () => {
+          set((state) => {
+            state.isLoading = true;
+            state.error = null;
+          });
+
+          try {
+            await authApi.resendVerification();
+            
+            set((state) => {
+              state.isLoading = false;
+            });
+          } catch (error: any) {
+            set((state) => {
+              state.error = error.message || 'Failed to resend verification';
+              state.isLoading = false;
+            });
+            throw error;
+          }
+        },
+
+        requestPasswordReset: async (email) => {
+          set((state) => {
+            state.isLoading = true;
+            state.error = null;
+          });
+
+          try {
+            await authApi.requestPasswordReset({ email });
+            
+            set((state) => {
+              state.isLoading = false;
+            });
+          } catch (error: any) {
+            set((state) => {
+              state.error = error.message || 'Password reset request failed';
+              state.isLoading = false;
+            });
+            throw error;
+          }
+        },
+
+        confirmPasswordReset: async (token, password, confirmPassword) => {
+          set((state) => {
+            state.isLoading = true;
+            state.error = null;
+          });
+
+          try {
+            await authApi.confirmPasswordReset({ token, password, confirmPassword });
+            
+            set((state) => {
+              state.isLoading = false;
+            });
+          } catch (error: any) {
+            set((state) => {
+              state.error = error.message || 'Password reset failed';
+              state.isLoading = false;
+            });
+            throw error;
+          }
+        },
+
+        updateProfile: (updates) =>
+          set((state) => {
+            if (state.user) {
+              Object.assign(state.user, updates);
+            }
+          }),
+
+        clearError: () =>
+          set((state) => {
+            state.error = null;
+          }),
+
+        // Token management
+        getAccessToken: () => {
+          const { tokens } = get();
+          return tokens?.accessToken || null;
+        },
+
+        isTokenExpired: () => {
+          const { tokens } = get();
+          if (!tokens) return true;
+          
+          const expiryTime = new Date().getTime() + tokens.expiresIn * 1000;
+          return new Date().getTime() > expiryTime;
+        },
+
+        // Private method
+        scheduleTokenRefresh: () => {
+          const { tokens } = get();
+          if (!tokens) return;
+
+          // Refresh 5 minutes before expiry
+          const refreshTime = (tokens.expiresIn - 300) * 1000;
+          
+          setTimeout(() => {
+            get().refreshAuth();
+          }, refreshTime);
+        },
+      })),
+      {
+        name: 'clst-auth-store',
+        partialize: (state) => ({
+          user: state.user,
+          tokens: state.tokens,
+          isAuthenticated: state.isAuthenticated,
+          isEmailVerified: state.isEmailVerified,
+        }),
+      }
+    )
+  )
+);
+
+// src/features/auth/hooks/useAuth.ts
+import { useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../stores/auth.store';
+import { toast } from '@/shared/components/feedback/Toast';
+
+export function useAuth() {
+  const navigate = useNavigate();
+  const {
+    user,
+    isAuthenticated,
+    isLoading,
+    error,
+    login,
+    signup,
+    logout,
+    clearError,
+  } = useAuthStore();
+
+  const handleLogin = useCallback(async (credentials: LoginCredentials) => {
+    try {
+      await login(credentials);
+      toast.show({ type: 'success', message: 'Welcome back!' });
+      navigate('/');
+    } catch (error) {
+      toast.show({ type: 'error', message: 'Invalid email or password' });
+    }
+  }, [login, navigate]);
+
+  const handleSignup = useCallback(async (data: SignupData) => {
+    try {
+      await signup(data);
+      toast.show({ 
+        type: 'success', 
+        message: 'Account created! Please check your email to verify.' 
+      });
+      navigate('/verify-email');
+    } catch (error) {
+      toast.show({ type: 'error', message: 'Signup failed. Please try again.' });
+    }
+  }, [signup, navigate]);
+
+  const handleLogout = useCallback(async () => {
+    await logout();
+    navigate('/login');
+    toast.show({ type: 'info', message: 'You have been logged out' });
+  }, [logout, navigate]);
+
+  return {
+    user,
+    isAuthenticated,
+    isLoading,
+    error,
+    login: handleLogin,
+    signup: handleSignup,
+    logout: handleLogout,
+    clearError,
+  };
+}
+
+// src/features/auth/components/LoginForm/LoginForm.tsx
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/shared/components/ui/Button';
+import { Input } from '@/shared/components/ui/Input';
+import { useAuth } from '../../hooks/useAuth';
+import { validators } from '@/shared/utils/validators';
+
+export const LoginForm: React.FC = () => {
+  const { login, isLoading, error } = useAuth();
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!validators.email(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+
+    if (formData.password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+
+    await login(formData);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Clear error for this field
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div>
+        <label htmlFor="email" className="block text-sm font-medium mb-2">
+          Email Address
+        </label>
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          value={formData.email}
+          onChange={handleChange}
+          error={errors.email}
+          placeholder="you@example.com"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="password" className="block text-sm font-medium mb-2">
+          Password
+        </label>
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+          value={formData.password}
+          onChange={handleChange}
+          error={errors.password}
+          placeholder="••••••••"
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <label className="flex items-center">
+          <input
+            type="checkbox"
+            className="w-4 h-4 border-2 border-black rounded"
+          />
+          <span className="ml-2 text-sm">Remember me</span>
+        </label>
+
+        <Link
+          to="/forgot-password"
+          className="text-sm underline hover:no-underline"
+        >
+          Forgot password?
+        </Link>
+      </div>
+
+      {error && (
+        <div className="p-3 bg-red-100 border-2 border-red-500 rounded-lg text-red-900 text-sm">
+          {error}
+        </div>
+      )}
+
+      <Button
+        type="submit"
+        variant="primary"
+        size="lg"
+        isLoading={isLoading}
+        className="w-full"
+      >
+        Sign In
+      </Button>
+
+      <div className="text-center text-sm">
+        Don't have an account?{' '}
+        <Link to="/signup" className="font-medium underline hover:no-underline">
+          Sign up
+        </Link>
+      </div>
+    </form>
+  );
+};
+
+// src/features/auth/components/SignupForm/SignupForm.tsx
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/shared/components/ui/Button';
+import { Input } from '@/shared/components/ui/Input';
+import { useAuth } from '../../hooks/useAuth';
+import { validators } from '@/shared/utils/validators';
+
+export const SignupForm: React.FC = () => {
+  const { signup, isLoading, error } = useAuth();
+  const [formData, setFormData] = useState({
+    email: '',
+    username: '',
+    firstName: '',
+    lastName: '',
+    password: '',
+    confirmPassword: '',
+    acceptTerms: false,
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!validators.email(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+
+    if (!validators.username(formData.username)) {
+      newErrors.username = 'Username must be 3-20 characters, alphanumeric and underscore only';
+    }
+
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = 'First name is required';
+    }
+
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = 'Last name is required';
+    }
+
+    const passwordValidation = validators.password(formData.password);
+    if (!passwordValidation.valid) {
+      newErrors.password = passwordValidation.errors[0];
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    if (!formData.acceptTerms) {
+      newErrors.acceptTerms = 'You must accept the terms and conditions';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+
+    await signup(formData);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+    
+    // Clear error for this field
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label htmlFor="firstName" className="block text-sm font-medium mb-2">
+            First Name
+          </label>
+          <Input
+            id="firstName"
+            name="firstName"
+            type="text"
+            autoComplete="given-name"
+            required
+            value={formData.firstName}
+            onChange={handleChange}
+            error={errors.firstName}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="lastName" className="block text-sm font-medium mb-2">
+            Last Name
+          </label>
+          <Input
+            id="lastName"
+            name="lastName"
+            type="text"
+            autoComplete="family-name"
+            required
+            value={formData.lastName}
+            onChange={handleChange}
+            error={errors.lastName}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="username" className="block text-sm font-medium mb-2">
+          Username
+        </label>
+        <Input
+          id="username"
+          name="username"
+          type="text"
+          autoComplete="username"
+          required
+          value={formData.username}
+          onChange={handleChange}
+          error={errors.username}
+        />
+      </div>
+
+      <div>
+        <label htmlFor="email" className="block text-sm font-medium mb-2">
+          Email Address
+        </label>
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          value={formData.email}
+          onChange={handleChange}
+          error={errors.email}
+        />
+      </div>
+
+      <div>
+        <label htmlFor="password" className="block text-sm font-medium mb-2">
+          Password
+        </label>
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          autoComplete="new-password"
+          required
+          value={formData.password}
+          onChange={handleChange}
+          error={errors.password}
+        />
+        <p className="mt-1 text-xs text-gray-600">
+          Must be at least 8 characters with uppercase, lowercase, and numbers
+        </p>
+      </div>
+
+      <div>
+        <label htmlFor="confirmPassword" className="block text-sm font-medium mb-2">
+          Confirm Password
+        </label>
+        <Input
+          id="confirmPassword"
+          name="confirmPassword"
+          type="password"
+          autoComplete="new-password"
+          required
+          value={formData.confirmPassword}
+          onChange={handleChange}
+          error={errors.confirmPassword}
+        />
+      </div>
+
+      <div>
+        <label className="flex items-start">
+          <input
+            type="checkbox"
+            name="acceptTerms"
+            className="w-4 h-4 border-2 border-black rounded mt-0.5"
+            checked={formData.acceptTerms}
+            onChange={handleChange}
+          />
+          <span className="ml-2 text-sm">
+            I agree to the{' '}
+            <Link to="/terms" className="underline hover:no-underline">
+              Terms and Conditions
+            </Link>{' '}
+            and{' '}
+            <Link to="/privacy" className="underline hover:no-underline">
+              Privacy Policy
+            </Link>
+          </span>
+        </label>
+        {errors.acceptTerms && (
+          <p className="mt-1 text-sm text-red-600">{errors.acceptTerms}</p>
+        )}
+      </div>
+
+      {error && (
+        <div className="p-3 bg-red-100 border-2 border-red-500 rounded-lg text-red-900 text-sm">
+          {error}
+        </div>
+      )}
+
+      <Button
+        type="submit"
+        variant="primary"
+        size="lg"
+        isLoading={isLoading}
+        className="w-full"
+      >
+        Create Account
+      </Button>
+
+      <div className="text-center text-sm">
+        Already have an account?{' '}
+        <Link to="/login" className="font-medium underline hover:no-underline">
+          Sign in
+        </Link>
+      </div>
+    </form>
+  );
+};
+
+// src/features/auth/pages/LoginPage.tsx
+import React from 'react';
+import { LoginForm } from '../components/LoginForm';
+import { Card } from '@/shared/components/ui/Card';
+
+const LoginPage: React.FC = () => {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-2">CLST</h1>
+          <p className="text-gray-600">Sign in to your digital closet</p>
+        </div>
+        
+        <Card variant="outlined" padding="lg">
+          <LoginForm />
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default LoginPage;
+
+// src/features/auth/pages/SignupPage.tsx
+import React from 'react';
+import { SignupForm } from '../components/SignupForm';
+import { Card } from '@/shared/components/ui/Card';
+
+const SignupPage: React.FC = () => {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-2">CLST</h1>
+          <p className="text-gray-600">Create your digital fashion account</p>
+        </div>
+        
+        <Card variant="outlined" padding="lg">
+          <SignupForm />
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default SignupPage;
+
+// src/shared/components/ui/Input/Input.tsx
+import React, { forwardRef } from 'react';
+import { cn } from '@/shared/utils/cn';
+
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  error?: string;
+  icon?: React.ReactNode;
+}
+
+export const Input = forwardRef<HTMLInputElement, InputProps>(
+  ({ className, error, icon, ...props }, ref) => {
+    return (
+      <div className="w-full">
+        <div className="relative">
+          {icon && (
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+              {icon}
+            </div>
+          )}
+          <input
+            ref={ref}
+            className={cn(
+              'w-full px-3 py-2 border-2 border-black rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black',
+              icon && 'pl-10',
+              error && 'border-red-500',
+              className
+            )}
+            {...props}
+          />
+        </div>
+        {error && (
+          <p className="mt-1 text-sm text-red-600">{error}</p>
+        )}
+      </div>
+    );
+  }
+);
+
+Input.displayName = 'Input';
