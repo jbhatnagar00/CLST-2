@@ -1,0 +1,1240 @@
+// src/features/marketplace/api/marketplace.api.ts
+import { apiClient } from '@/shared/services/api/ApiClient';
+import type { Listing, Offer, Transaction, SellerProfile } from '../types';
+import type { PaginatedResponse, PaginationParams } from '@/shared/types';
+
+interface ListingFilters {
+  category?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  size?: string;
+  condition?: string;
+  brand?: string;
+  sellerId?: string;
+  search?: string;
+  sortBy?: 'price_asc' | 'price_desc' | 'newest' | 'popular';
+}
+
+export const marketplaceApi = {
+  // Listings
+  getListings: async (params: PaginationParams & ListingFilters): Promise<PaginatedResponse<Listing>> => {
+    return apiClient.get('/marketplace/listings', { params });
+  },
+
+  getListing: async (id: string): Promise<Listing> => {
+    return apiClient.get(`/marketplace/listings/${id}`);
+  },
+
+  createListing: async (data: FormData): Promise<Listing> => {
+    return apiClient.post('/marketplace/listings', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  updateListing: async (id: string, data: Partial<Listing>): Promise<Listing> => {
+    return apiClient.patch(`/marketplace/listings/${id}`, data);
+  },
+
+  deleteListing: async (id: string): Promise<void> => {
+    return apiClient.delete(`/marketplace/listings/${id}`);
+  },
+
+  // Offers
+  makeOffer: async (listingId: string, amount: number, message?: string): Promise<Offer> => {
+    return apiClient.post(`/marketplace/listings/${listingId}/offers`, { amount, message });
+  },
+
+  getOffers: async (listingId: string): Promise<Offer[]> => {
+    return apiClient.get(`/marketplace/listings/${listingId}/offers`);
+  },
+
+  acceptOffer: async (offerId: string): Promise<Transaction> => {
+    return apiClient.post(`/marketplace/offers/${offerId}/accept`);
+  },
+
+  rejectOffer: async (offerId: string): Promise<void> => {
+    return apiClient.post(`/marketplace/offers/${offerId}/reject`);
+  },
+
+  // Transactions
+  getTransactions: async (params: PaginationParams): Promise<PaginatedResponse<Transaction>> => {
+    return apiClient.get('/marketplace/transactions', { params });
+  },
+
+  createPaymentIntent: async (transactionId: string): Promise<{ clientSecret: string }> => {
+    return apiClient.post(`/marketplace/transactions/${transactionId}/payment-intent`);
+  },
+
+  confirmPayment: async (transactionId: string): Promise<Transaction> => {
+    return apiClient.post(`/marketplace/transactions/${transactionId}/confirm`);
+  },
+
+  // Favorites
+  getFavorites: async (): Promise<Listing[]> => {
+    return apiClient.get('/marketplace/favorites');
+  },
+
+  addFavorite: async (listingId: string): Promise<void> => {
+    return apiClient.post(`/marketplace/listings/${listingId}/favorite`);
+  },
+
+  removeFavorite: async (listingId: string): Promise<void> => {
+    return apiClient.delete(`/marketplace/listings/${listingId}/favorite`);
+  },
+
+  // Seller
+  getSellerProfile: async (sellerId: string): Promise<SellerProfile> => {
+    return apiClient.get(`/marketplace/sellers/${sellerId}`);
+  },
+
+  rateSeller: async (sellerId: string, rating: number, comment?: string): Promise<void> => {
+    return apiClient.post(`/marketplace/sellers/${sellerId}/rate`, { rating, comment });
+  },
+
+  // Analytics
+  trackListingView: async (listingId: string): Promise<void> => {
+    return apiClient.post(`/marketplace/listings/${listingId}/view`);
+  },
+};
+
+// src/features/marketplace/types/marketplace.types.ts
+import type { BaseEntity, ID, User } from '@/shared/types';
+import type { ClothingItem } from '@/features/closet/types';
+
+export interface Listing extends BaseEntity {
+  sellerId: ID;
+  seller: User;
+  itemId: ID;
+  item: ClothingItem;
+  title: string;
+  description: string;
+  price: number;
+  originalPrice?: number;
+  condition: ListingCondition;
+  size: string;
+  measurements?: ItemMeasurements;
+  shipping: ShippingOptions;
+  status: ListingStatus;
+  views: number;
+  favorites: number;
+  offers: Offer[];
+  images: ListingImage[];
+  tags: string[];
+  isFavorited?: boolean;
+}
+
+export type ListingCondition = 
+  | 'new-with-tags'
+  | 'new-without-tags'
+  | 'excellent'
+  | 'good'
+  | 'fair';
+
+export type ListingStatus = 
+  | 'active'
+  | 'sold'
+  | 'reserved'
+  | 'expired'
+  | 'draft';
+
+export interface ListingImage {
+  id: ID;
+  url: string;
+  thumbnailUrl: string;
+  isPrimary: boolean;
+}
+
+export interface ItemMeasurements {
+  chest?: number;
+  waist?: number;
+  hips?: number;
+  length?: number;
+  shoulders?: number;
+  sleeves?: number;
+  inseam?: number;
+  rise?: number;
+}
+
+export interface ShippingOptions {
+  domestic: ShippingMethod;
+  international?: ShippingMethod;
+  pickup: boolean;
+}
+
+export interface ShippingMethod {
+  available: boolean;
+  price: number;
+  estimatedDays: string;
+  carrier?: string;
+}
+
+export interface Offer extends BaseEntity {
+  buyerId: ID;
+  buyer: User;
+  listingId: ID;
+  amount: number;
+  message?: string;
+  status: OfferStatus;
+  expiresAt: string;
+}
+
+export type OfferStatus = 'pending' | 'accepted' | 'rejected' | 'expired' | 'withdrawn';
+
+export interface Transaction extends BaseEntity {
+  listingId: ID;
+  listing: Listing;
+  buyerId: ID;
+  buyer: User;
+  sellerId: ID;
+  seller: User;
+  amount: number;
+  shippingCost: number;
+  serviceFee: number;
+  totalAmount: number;
+  status: TransactionStatus;
+  paymentMethod?: string;
+  shippingAddress?: ShippingAddress;
+  trackingNumber?: string;
+  completedAt?: string;
+}
+
+export type TransactionStatus = 
+  | 'pending_payment'
+  | 'paid'
+  | 'shipped'
+  | 'delivered'
+  | 'completed'
+  | 'cancelled'
+  | 'refunded';
+
+export interface ShippingAddress {
+  name: string;
+  street1: string;
+  street2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+}
+
+export interface SellerProfile {
+  userId: ID;
+  user: User;
+  rating: number;
+  reviewCount: number;
+  salesCount: number;
+  joinedDate: string;
+  responseTime: string;
+  shipmentTime: string;
+  bio?: string;
+  policies?: SellerPolicies;
+  reviews: SellerReview[];
+}
+
+export interface SellerPolicies {
+  returns: string;
+  shipping: string;
+  payment: string;
+}
+
+export interface SellerReview extends BaseEntity {
+  buyerId: ID;
+  buyer: User;
+  rating: number;
+  comment?: string;
+  transactionId: ID;
+}
+
+// src/features/marketplace/stores/marketplace.store.ts
+import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+import type { Listing, ListingFilters, Transaction } from '../types';
+import { marketplaceApi } from '../api/marketplace.api';
+
+interface MarketplaceState {
+  // Listings
+  listings: Listing[];
+  currentListing: Listing | null;
+  favorites: Set<string>;
+  filters: ListingFilters;
+  isLoading: boolean;
+  error: string | null;
+  
+  // Transactions
+  activeTransactions: Transaction[];
+  
+  // Pagination
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+
+  // Actions - Listings
+  fetchListings: (page?: number) => Promise<void>;
+  fetchListing: (id: string) => Promise<void>;
+  createListing: (data: FormData) => Promise<void>;
+  updateListing: (id: string, updates: Partial<Listing>) => Promise<void>;
+  deleteListing: (id: string) => Promise<void>;
+  
+  // Actions - Filters
+  setFilters: (filters: Partial<ListingFilters>) => void;
+  clearFilters: () => void;
+  
+  // Actions - Favorites
+  toggleFavorite: (listingId: string) => Promise<void>;
+  fetchFavorites: () => Promise<void>;
+  
+  // Actions - Offers
+  makeOffer: (listingId: string, amount: number, message?: string) => Promise<void>;
+  
+  // Actions - Transactions
+  fetchTransactions: () => Promise<void>;
+  
+  // Actions - Analytics
+  trackView: (listingId: string) => void;
+}
+
+const initialFilters: ListingFilters = {
+  search: '',
+  category: undefined,
+  minPrice: undefined,
+  maxPrice: undefined,
+  size: undefined,
+  condition: undefined,
+  brand: undefined,
+  sortBy: 'newest',
+};
+
+export const useMarketplaceStore = create<MarketplaceState>()(
+  devtools(
+    immer((set, get) => ({
+      // Initial State
+      listings: [],
+      currentListing: null,
+      favorites: new Set(),
+      filters: initialFilters,
+      isLoading: false,
+      error: null,
+      activeTransactions: [],
+      currentPage: 1,
+      totalPages: 1,
+      totalItems: 0,
+
+      // Listings Actions
+      fetchListings: async (page = 1) => {
+        set((state) => {
+          state.isLoading = true;
+          state.error = null;
+          state.currentPage = page;
+        });
+
+        try {
+          const { filters } = get();
+          const response = await marketplaceApi.getListings({
+            page,
+            limit: 24,
+            ...filters,
+          });
+
+          set((state) => {
+            state.listings = response.data;
+            state.totalPages = response.meta.totalPages;
+            state.totalItems = response.meta.total;
+            state.isLoading = false;
+          });
+        } catch (error: any) {
+          set((state) => {
+            state.error = error.message || 'Failed to fetch listings';
+            state.isLoading = false;
+          });
+        }
+      },
+
+      fetchListing: async (id) => {
+        set((state) => {
+          state.isLoading = true;
+          state.error = null;
+        });
+
+        try {
+          const listing = await marketplaceApi.getListing(id);
+          
+          set((state) => {
+            state.currentListing = listing;
+            state.isLoading = false;
+          });
+
+          // Track view
+          get().trackView(id);
+        } catch (error: any) {
+          set((state) => {
+            state.error = error.message || 'Failed to fetch listing';
+            state.isLoading = false;
+          });
+        }
+      },
+
+      createListing: async (data) => {
+        try {
+          const newListing = await marketplaceApi.createListing(data);
+          
+          set((state) => {
+            state.listings.unshift(newListing);
+          });
+        } catch (error: any) {
+          throw error;
+        }
+      },
+
+      updateListing: async (id, updates) => {
+        try {
+          const updatedListing = await marketplaceApi.updateListing(id, updates);
+          
+          set((state) => {
+            const index = state.listings.findIndex(l => l.id === id);
+            if (index !== -1) {
+              state.listings[index] = updatedListing;
+            }
+            if (state.currentListing?.id === id) {
+              state.currentListing = updatedListing;
+            }
+          });
+        } catch (error: any) {
+          throw error;
+        }
+      },
+
+      deleteListing: async (id) => {
+        try {
+          await marketplaceApi.deleteListing(id);
+          
+          set((state) => {
+            state.listings = state.listings.filter(l => l.id !== id);
+            if (state.currentListing?.id === id) {
+              state.currentListing = null;
+            }
+          });
+        } catch (error: any) {
+          throw error;
+        }
+      },
+
+      // Filter Actions
+      setFilters: (newFilters) => {
+        set((state) => {
+          state.filters = { ...state.filters, ...newFilters };
+        });
+        get().fetchListings(1);
+      },
+
+      clearFilters: () => {
+        set((state) => {
+          state.filters = initialFilters;
+        });
+        get().fetchListings(1);
+      },
+
+      // Favorites Actions
+      toggleFavorite: async (listingId) => {
+        const { favorites } = get();
+        const isFavorited = favorites.has(listingId);
+
+        try {
+          if (isFavorited) {
+            await marketplaceApi.removeFavorite(listingId);
+            set((state) => {
+              state.favorites.delete(listingId);
+            });
+          } else {
+            await marketplaceApi.addFavorite(listingId);
+            set((state) => {
+              state.favorites.add(listingId);
+            });
+          }
+
+          // Update listing favorite status
+          set((state) => {
+            const listing = state.listings.find(l => l.id === listingId);
+            if (listing) {
+              listing.isFavorited = !isFavorited;
+              listing.favorites += isFavorited ? -1 : 1;
+            }
+            if (state.currentListing?.id === listingId) {
+              state.currentListing.isFavorited = !isFavorited;
+              state.currentListing.favorites += isFavorited ? -1 : 1;
+            }
+          });
+        } catch (error: any) {
+          throw error;
+        }
+      },
+
+      fetchFavorites: async () => {
+        try {
+          const favorites = await marketplaceApi.getFavorites();
+          set((state) => {
+            state.favorites = new Set(favorites.map(f => f.id));
+          });
+        } catch (error: any) {
+          console.error('Failed to fetch favorites:', error);
+        }
+      },
+
+      // Offer Actions
+      makeOffer: async (listingId, amount, message) => {
+        try {
+          await marketplaceApi.makeOffer(listingId, amount, message);
+        } catch (error: any) {
+          throw error;
+        }
+      },
+
+      // Transaction Actions
+      fetchTransactions: async () => {
+        try {
+          const response = await marketplaceApi.getTransactions({ page: 1, limit: 20 });
+          set((state) => {
+            state.activeTransactions = response.data;
+          });
+        } catch (error: any) {
+          console.error('Failed to fetch transactions:', error);
+        }
+      },
+
+      // Analytics Actions
+      trackView: (listingId) => {
+        marketplaceApi.trackListingView(listingId).catch(console.error);
+      },
+    }))
+  )
+);
+
+// src/features/marketplace/components/ListingCard/ListingCard.tsx
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import { formatCurrency, formatRelativeTime } from '@/shared/utils/helpers';
+import { useMarketplaceStore } from '../../stores/marketplace.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import type { Listing } from '../../types';
+
+interface ListingCardProps {
+  listing: Listing;
+}
+
+export const ListingCard: React.FC<ListingCardProps> = ({ listing }) => {
+  const { user } = useAuthStore();
+  const { toggleFavorite, favorites } = useMarketplaceStore();
+  const isFavorited = favorites.has(listing.id);
+  const isOwnListing = user?.id === listing.sellerId;
+
+  const primaryImage = listing.images.find(img => img.isPrimary) || listing.images[0];
+  const discount = listing.originalPrice 
+    ? Math.round((1 - listing.price / listing.originalPrice) * 100)
+    : 0;
+
+  const handleFavoriteClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!user) {
+      // Redirect to login
+      return;
+    }
+    
+    try {
+      await toggleFavorite(listing.id);
+    } catch (error) {
+      console.error('Failed to toggle favorite:', error);
+    }
+  };
+
+  return (
+    <Card variant="outlined" className="group hover:shadow-lg transition-shadow">
+      <Link to={`/marketplace/${listing.id}`}>
+        <div className="aspect-square relative overflow-hidden">
+          {primaryImage ? (
+            <img
+              src={primaryImage.url}
+              alt={listing.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              loading="lazy"
+            />
+          ) : (
+            <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+              <span className="text-4xl">🏷️</span>
+            </div>
+          )}
+
+          {listing.status !== 'active' && (
+            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+              <span className="text-white font-bold text-lg uppercase">
+                {listing.status}
+              </span>
+            </div>
+          )}
+
+          {discount > 0 && listing.status === 'active' && (
+            <div className="absolute top-2 left-2 bg-red-500 text-white px-2 py-1 rounded text-sm font-bold">
+              -{discount}%
+            </div>
+          )}
+
+          {!isOwnListing && (
+            <button
+              onClick={handleFavoriteClick}
+              className="absolute top-2 right-2 w-10 h-10 bg-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+              aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              {isFavorited ? '❤️' : '🤍'}
+            </button>
+          )}
+        </div>
+      </Link>
+
+      <div className="p-4">
+        <Link to={`/marketplace/${listing.id}`}>
+          <h3 className="font-semibold truncate hover:underline">
+            {listing.title}
+          </h3>
+        </Link>
+
+        <p className="text-sm text-gray-600 truncate">
+          {listing.item.brand} • Size {listing.size}
+        </p>
+
+        <div className="mt-2 flex items-center justify-between">
+          <div>
+            <p className="font-bold text-lg">
+              {formatCurrency(listing.price)}
+            </p>
+            {listing.originalPrice && (
+              <p className="text-sm text-gray-500 line-through">
+                {formatCurrency(listing.originalPrice)}
+              </p>
+            )}
+          </div>
+
+          <div className="text-right text-sm text-gray-500">
+            <p>{listing.condition}</p>
+            <p>{formatRelativeTime(listing.createdAt)}</p>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between">
+          <Link 
+            to={`/profile/${listing.seller.username}`}
+            className="flex items-center space-x-2 text-sm hover:underline"
+          >
+            <img
+              src={listing.seller.profile.avatar || '/default-avatar.png'}
+              alt={listing.seller.username}
+              className="w-6 h-6 rounded-full border border-gray-300"
+            />
+            <span>{listing.seller.username}</span>
+          </Link>
+
+          {listing.seller.rating && (
+            <div className="flex items-center text-sm">
+              <span>⭐ {listing.seller.rating.toFixed(1)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+};
+
+// src/features/marketplace/components/ListingFilters/ListingFilters.tsx
+import React from 'react';
+import { Input } from '@/shared/components/ui/Input';
+import { Select } from '@/shared/components/ui/Select';
+import { Button } from '@/shared/components/ui/Button';
+import { RangeSlider } from '@/shared/components/ui/RangeSlider';
+import { useMarketplaceStore } from '../../stores/marketplace.store';
+import type { ClothingCategory } from '@/features/closet/types';
+
+const CATEGORIES: { value: ClothingCategory | ''; label: string }[] = [
+  { value: '', label: 'All Categories' },
+  { value: 'tops', label: 'Tops' },
+  { value: 'bottoms', label: 'Bottoms' },
+  { value: 'dresses', label: 'Dresses' },
+  { value: 'outerwear', label: 'Outerwear' },
+  { value: 'shoes', label: 'Shoes' },
+  { value: 'accessories', label: 'Accessories' },
+];
+
+const CONDITIONS = [
+  { value: '', label: 'Any Condition' },
+  { value: 'new-with-tags', label: 'New with Tags' },
+  { value: 'new-without-tags', label: 'New without Tags' },
+  { value: 'excellent', label: 'Excellent' },
+  { value: 'good', label: 'Good' },
+  { value: 'fair', label: 'Fair' },
+];
+
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest First' },
+  { value: 'price_asc', label: 'Price: Low to High' },
+  { value: 'price_desc', label: 'Price: High to Low' },
+  { value: 'popular', label: 'Most Popular' },
+];
+
+export const ListingFilters: React.FC = () => {
+  const { filters, setFilters, clearFilters } = useMarketplaceStore();
+
+  const handlePriceChange = (values: [number, number]) => {
+    setFilters({
+      minPrice: values[0] || undefined,
+      maxPrice: values[1] || undefined,
+    });
+  };
+
+  const hasActiveFilters = 
+    filters.search ||
+    filters.category ||
+    filters.condition ||
+    filters.minPrice !== undefined ||
+    filters.maxPrice !== undefined;
+
+  return (
+    <div className="space-y-4">
+      {/* Search and Sort */}
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="flex-1">
+          <Input
+            placeholder="Search listings..."
+            value={filters.search || ''}
+            onChange={(e) => setFilters({ search: e.target.value })}
+            icon={<span>🔍</span>}
+          />
+        </div>
+
+        <Select
+          value={filters.sortBy || 'newest'}
+          onChange={(value) => setFilters({ sortBy: value as any })}
+          options={SORT_OPTIONS}
+          className="w-full md:w-48"
+        />
+      </div>
+
+      {/* Filters */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Select
+          value={filters.category || ''}
+          onChange={(value) => setFilters({ category: value || undefined })}
+          options={CATEGORIES}
+        />
+
+        <Select
+          value={filters.condition || ''}
+          onChange={(value) => setFilters({ condition: value || undefined })}
+          options={CONDITIONS}
+        />
+
+        <Input
+          placeholder="Size"
+          value={filters.size || ''}
+          onChange={(e) => setFilters({ size: e.target.value || undefined })}
+        />
+
+        <Input
+          placeholder="Brand"
+          value={filters.brand || ''}
+          onChange={(e) => setFilters({ brand: e.target.value || undefined })}
+        />
+      </div>
+
+      {/* Price Range */}
+      <div className="p-4 border-2 border-gray-200 rounded-lg">
+        <h4 className="font-medium mb-3">Price Range</h4>
+        <RangeSlider
+          min={0}
+          max={1000}
+          step={10}
+          values={[filters.minPrice || 0, filters.maxPrice || 1000]}
+          onChange={handlePriceChange}
+        />
+        <div className="flex justify-between mt-2 text-sm text-gray-600">
+          <span>${filters.minPrice || 0}</span>
+          <span>${filters.maxPrice || 1000}+</span>
+        </div>
+      </div>
+
+      {/* Clear Filters */}
+      {hasActiveFilters && (
+        <div className="flex justify-end">
+          <Button variant="ghost" size="sm" onClick={clearFilters}>
+            Clear All Filters
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// src/features/marketplace/components/CreateListingForm/CreateListingForm.tsx
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Card } from '@/shared/components/ui/Card';
+import { Button } from '@/shared/components/ui/Button';
+import { Input } from '@/shared/components/ui/Input';
+import { Select } from '@/shared/components/ui/Select';
+import { TextArea } from '@/shared/components/ui/TextArea';
+import { ImageUpload } from '@/features/closet/components/ImageUpload';
+import { closetApi } from '@/features/closet/api/closet.api';
+import { useMarketplaceStore } from '../../stores/marketplace.store';
+import { toast } from '@/shared/components/feedback/Toast';
+import type { ClothingItem } from '@/features/closet/types';
+
+const CONDITIONS = [
+  { value: 'new-with-tags', label: 'New with Tags' },
+  { value: 'new-without-tags', label: 'New without Tags' },
+  { value: 'excellent', label: 'Excellent - Like New' },
+  { value: 'good', label: 'Good - Minor Wear' },
+  { value: 'fair', label: 'Fair - Visible Wear' },
+];
+
+export const CreateListingForm: React.FC = () => {
+  const navigate = useNavigate();
+  const { createListing } = useMarketplaceStore();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<ClothingItem | null>(null);
+  const [images, setImages] = useState<File[]>([]);
+  
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    price: '',
+    originalPrice: '',
+    condition: 'excellent',
+    size: '',
+    domesticShipping: '10',
+    internationalShipping: '',
+    pickup: false,
+    measurements: {
+      chest: '',
+      waist: '',
+      hips: '',
+      length: '',
+      shoulders: '',
+      sleeves: '',
+      inseam: '',
+    },
+  });
+
+  const { data: closetItems } = useQuery({
+    queryKey: ['closet-items-for-listing'],
+    queryFn: () => closetApi.getItems({ page: 1, limit: 1000 }),
+  });
+
+  const handleItemSelect = (item: ClothingItem) => {
+    setSelectedItem(item);
+    setFormData(prev => ({
+      ...prev,
+      title: item.name,
+      size: item.size || '',
+      originalPrice: item.price?.toString() || '',
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedItem) {
+      toast.show({ type: 'error', message: 'Please select an item from your closet' });
+      return;
+    }
+
+    const submitData = new FormData();
+    submitData.append('itemId', selectedItem.id);
+    submitData.append('title', formData.title);
+    submitData.append('description', formData.description);
+    submitData.append('price', formData.price);
+    submitData.append('originalPrice', formData.originalPrice);
+    submitData.append('condition', formData.condition);
+    submitData.append('size', formData.size);
+    
+    // Shipping
+    submitData.append('shipping[domestic][available]', 'true');
+    submitData.append('shipping[domestic][price]', formData.domesticShipping);
+    submitData.append('shipping[domestic][estimatedDays]', '3-5');
+    
+    if (formData.internationalShipping) {
+      submitData.append('shipping[international][available]', 'true');
+      submitData.append('shipping[international][price]', formData.internationalShipping);
+      submitData.append('shipping[international][estimatedDays]', '7-14');
+    }
+    
+    submitData.append('shipping[pickup]', formData.pickup.toString());
+    
+    // Measurements
+    Object.entries(formData.measurements).forEach(([key, value]) => {
+      if (value) {
+        submitData.append(`measurements[${key}]`, value);
+      }
+    });
+    
+    // Images
+    images.forEach((image) => {
+      submitData.append('images', image);
+    });
+
+    setIsSubmitting(true);
+    try {
+      await createListing(submitData);
+      toast.show({ type: 'success', message: 'Listing created successfully!' });
+      navigate('/marketplace');
+    } catch (error) {
+      toast.show({ type: 'error', message: 'Failed to create listing' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Item Selection */}
+      <Card variant="outlined" padding="lg">
+        <h3 className="text-lg font-semibold mb-4">Select Item from Closet</h3>
+        
+        {selectedItem ? (
+          <div className="flex items-center space-x-4 p-4 border-2 border-black rounded-lg">
+            <img
+              src={selectedItem.images[0]?.thumbnailUrl}
+              alt={selectedItem.name}
+              className="w-20 h-20 object-cover rounded"
+            />
+            <div>
+              <p className="font-semibold">{selectedItem.name}</p>
+              <p className="text-sm text-gray-600">
+                {selectedItem.brand} • {selectedItem.category} • {selectedItem.size}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedItem(null)}
+            >
+              Change
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-h-96 overflow-y-auto">
+            {closetItems?.data.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleItemSelect(item)}
+                className="p-2 border-2 border-gray-300 rounded-lg hover:border-black transition-colors"
+              >
+                <img
+                  src={item.images[0]?.thumbnailUrl}
+                  alt={item.name}
+                  className="w-full aspect-square object-cover rounded mb-2"
+                />
+                <p className="text-xs truncate">{item.name}</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Listing Details */}
+      <Card variant="outlined" padding="lg">
+        <h3 className="text-lg font-semibold mb-4">Listing Details</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium mb-2">
+              Title *
+            </label>
+            <Input
+              value={formData.title}
+              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+              required
+              placeholder="Vintage Nike Swoosh T-Shirt"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium mb-2">
+              Description *
+            </label>
+            <TextArea
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              required
+              rows={4}
+              placeholder="Describe the item's condition, fit, and any flaws..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Price *
+            </label>
+            <Input
+              type="number"
+              value={formData.price}
+              onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
+              required
+              min="0"
+              step="0.01"
+              placeholder="49.99"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Original Price
+            </label>
+            <Input
+              type="number"
+              value={formData.originalPrice}
+              onChange={(e) => setFormData(prev => ({ ...prev, originalPrice: e.target.value }))}
+              min="0"
+              step="0.01"
+              placeholder="89.99"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Condition *
+            </label>
+            <Select
+              value={formData.condition}
+              onChange={(value) => setFormData(prev => ({ ...prev, condition: value }))}
+              options={CONDITIONS}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Size *
+            </label>
+            <Input
+              value={formData.size}
+              onChange={(e) => setFormData(prev => ({ ...prev, size: e.target.value }))}
+              required
+              placeholder="M"
+            />
+          </div>
+        </div>
+      </Card>
+
+      {/* Additional Images */}
+      <Card variant="outlined" padding="lg">
+        <h3 className="text-lg font-semibold mb-4">Additional Photos</h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Add more photos to show different angles, details, or flaws
+        </p>
+        
+        <ImageUpload
+          images={images}
+          onChange={setImages}
+          maxFiles={8}
+        />
+      </Card>
+
+      {/* Measurements */}
+      <Card variant="outlined" padding="lg">
+        <h3 className="text-lg font-semibold mb-4">Measurements (inches)</h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Optional but recommended for better fit
+        </p>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Object.entries(formData.measurements).map(([key, value]) => (
+            <div key={key}>
+              <label className="block text-sm font-medium mb-2 capitalize">
+                {key}
+              </label>
+              <Input
+                type="number"
+                value={value}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  measurements: { ...prev.measurements, [key]: e.target.value }
+                }))}
+                min="0"
+                step="0.5"
+              />
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Shipping */}
+      <Card variant="outlined" padding="lg">
+        <h3 className="text-lg font-semibold mb-4">Shipping Options</h3>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Domestic Shipping *
+            </label>
+            <Input
+              type="number"
+              value={formData.domesticShipping}
+              onChange={(e) => setFormData(prev => ({ ...prev, domesticShipping: e.target.value }))}
+              required
+              min="0"
+              step="0.01"
+              placeholder="10.00"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              International Shipping
+            </label>
+            <Input
+              type="number"
+              value={formData.internationalShipping}
+              onChange={(e) => setFormData(prev => ({ ...prev, internationalShipping: e.target.value }))}
+              min="0"
+              step="0.01"
+              placeholder="25.00"
+            />
+          </div>
+
+          <label className="flex items-center">
+            <input
+              type="checkbox"
+              checked={formData.pickup}
+              onChange={(e) => setFormData(prev => ({ ...prev, pickup: e.target.checked }))}
+              className="w-4 h-4 border-2 border-black rounded mr-2"
+            />
+            <span className="text-sm">Available for local pickup</span>
+          </label>
+        </div>
+      </Card>
+
+      {/* Submit */}
+      <div className="flex justify-end space-x-4">
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => navigate('/marketplace')}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          variant="primary"
+          isLoading={isSubmitting}
+          disabled={!selectedItem}
+        >
+          Create Listing
+        </Button>
+      </div>
+    </form>
+  );
+};
+
+// src/features/marketplace/pages/MarketplacePage.tsx
+import React, { useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/shared/components/ui/Button';
+import { Loading } from '@/shared/components/feedback/Loading';
+import { ListingCard } from '../components/ListingCard';
+import { ListingFilters } from '../components/ListingFilters';
+import { Pagination } from '@/shared/components/ui/Pagination';
+import { useMarketplaceStore } from '../stores/marketplace.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+
+const MarketplacePage: React.FC = () => {
+  const { user } = useAuthStore();
+  const {
+    listings,
+    isLoading,
+    error,
+    currentPage,
+    totalPages,
+    totalItems,
+    fetchListings,
+    fetchFavorites,
+  } = useMarketplaceStore();
+
+  useEffect(() => {
+    fetchListings();
+    if (user) {
+      fetchFavorites();
+    }
+  }, []);
+
+  const handlePageChange = (page: number) => {
+    fetchListings(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">Failed to load marketplace</p>
+          <Button onClick={() => fetchListings()}>Try Again</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Marketplace</h1>
+            <p className="text-gray-600">
+              {totalItems} items available
+            </p>
+          </div>
+
+          {user && (
+            <Link to="/marketplace/create">
+              <Button variant="primary">
+                Sell an Item
+              </Button>
+            </Link>
+          )}
+        </div>
+
+        <ListingFilters />
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-12">
+          <Loading size="lg" />
+        </div>
+      ) : listings.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-gray-600 mb-4">No listings found</p>
+          <Button onClick={() => fetchListings(1)}>Clear Filters</Button>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+            {listings.map((listing) => (
+              <ListingCard key={listing.id} listing={listing} />
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="mt-8 flex justify-center">
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+export default MarketplacePage;
