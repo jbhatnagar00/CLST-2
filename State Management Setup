@@ -1,0 +1,620 @@
+// src/shared/stores/app.store.ts
+import { create } from 'zustand';
+import { devtools, persist } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+
+interface AppState {
+  // UI State
+  theme: 'light' | 'dark';
+  sidebarOpen: boolean;
+  activeModal: string | null;
+  
+  // App Settings
+  language: string;
+  currency: string;
+  
+  // Network State
+  isOnline: boolean;
+  isSyncing: boolean;
+  lastSyncTime: string | null;
+  
+  // Actions
+  setTheme: (theme: 'light' | 'dark') => void;
+  toggleSidebar: () => void;
+  openModal: (modalId: string) => void;
+  closeModal: () => void;
+  setLanguage: (language: string) => void;
+  setCurrency: (currency: string) => void;
+  setOnlineStatus: (isOnline: boolean) => void;
+  setSyncing: (isSyncing: boolean) => void;
+  updateLastSyncTime: () => void;
+}
+
+export const useAppStore = create<AppState>()(
+  devtools(
+    persist(
+      immer((set) => ({
+        // Initial State
+        theme: 'light',
+        sidebarOpen: false,
+        activeModal: null,
+        language: 'en',
+        currency: 'USD',
+        isOnline: true,
+        isSyncing: false,
+        lastSyncTime: null,
+
+        // Actions
+        setTheme: (theme) =>
+          set((state) => {
+            state.theme = theme;
+          }),
+
+        toggleSidebar: () =>
+          set((state) => {
+            state.sidebarOpen = !state.sidebarOpen;
+          }),
+
+        openModal: (modalId) =>
+          set((state) => {
+            state.activeModal = modalId;
+          }),
+
+        closeModal: () =>
+          set((state) => {
+            state.activeModal = null;
+          }),
+
+        setLanguage: (language) =>
+          set((state) => {
+            state.language = language;
+          }),
+
+        setCurrency: (currency) =>
+          set((state) => {
+            state.currency = currency;
+          }),
+
+        setOnlineStatus: (isOnline) =>
+          set((state) => {
+            state.isOnline = isOnline;
+          }),
+
+        setSyncing: (isSyncing) =>
+          set((state) => {
+            state.isSyncing = isSyncing;
+          }),
+
+        updateLastSyncTime: () =>
+          set((state) => {
+            state.lastSyncTime = new Date().toISOString();
+          }),
+      })),
+      {
+        name: 'clst-app-store',
+        partialize: (state) => ({
+          theme: state.theme,
+          language: state.language,
+          currency: state.currency,
+        }),
+      }
+    )
+  )
+);
+
+// src/features/auth/stores/auth.store.ts
+import { create } from 'zustand';
+import { devtools, persist } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+import type { User } from '@/shared/types';
+
+interface AuthState {
+  // State
+  user: User | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+
+  // Actions
+  login: (email: string, password: string) => Promise<void>;
+  signup: (data: SignupData) => Promise<void>;
+  logout: () => void;
+  refreshAuth: () => Promise<void>;
+  updateProfile: (updates: Partial<User>) => void;
+  clearError: () => void;
+}
+
+interface SignupData {
+  email: string;
+  username: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+}
+
+export const useAuthStore = create<AuthState>()(
+  devtools(
+    persist(
+      immer((set, get) => ({
+        // Initial State
+        user: null,
+        accessToken: null,
+        refreshToken: null,
+        isAuthenticated: false,
+        isLoading: false,
+        error: null,
+
+        // Actions
+        login: async (email, password) => {
+          set((state) => {
+            state.isLoading = true;
+            state.error = null;
+          });
+
+          try {
+            // API call would go here
+            const response = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password }),
+            });
+
+            if (!response.ok) throw new Error('Login failed');
+
+            const data = await response.json();
+
+            set((state) => {
+              state.user = data.user;
+              state.accessToken = data.accessToken;
+              state.refreshToken = data.refreshToken;
+              state.isAuthenticated = true;
+              state.isLoading = false;
+            });
+          } catch (error) {
+            set((state) => {
+              state.error = error instanceof Error ? error.message : 'Login failed';
+              state.isLoading = false;
+            });
+          }
+        },
+
+        signup: async (data) => {
+          set((state) => {
+            state.isLoading = true;
+            state.error = null;
+          });
+
+          try {
+            // API call would go here
+            const response = await fetch('/api/auth/signup', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data),
+            });
+
+            if (!response.ok) throw new Error('Signup failed');
+
+            const result = await response.json();
+
+            set((state) => {
+              state.user = result.user;
+              state.accessToken = result.accessToken;
+              state.refreshToken = result.refreshToken;
+              state.isAuthenticated = true;
+              state.isLoading = false;
+            });
+          } catch (error) {
+            set((state) => {
+              state.error = error instanceof Error ? error.message : 'Signup failed';
+              state.isLoading = false;
+            });
+          }
+        },
+
+        logout: () => {
+          set((state) => {
+            state.user = null;
+            state.accessToken = null;
+            state.refreshToken = null;
+            state.isAuthenticated = false;
+            state.error = null;
+          });
+        },
+
+        refreshAuth: async () => {
+          const { refreshToken } = get();
+          if (!refreshToken) return;
+
+          try {
+            const response = await fetch('/api/auth/refresh', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refreshToken }),
+            });
+
+            if (!response.ok) throw new Error('Token refresh failed');
+
+            const data = await response.json();
+
+            set((state) => {
+              state.accessToken = data.accessToken;
+              state.refreshToken = data.refreshToken;
+            });
+          } catch (error) {
+            get().logout();
+          }
+        },
+
+        updateProfile: (updates) =>
+          set((state) => {
+            if (state.user) {
+              Object.assign(state.user, updates);
+            }
+          }),
+
+        clearError: () =>
+          set((state) => {
+            state.error = null;
+          }),
+      })),
+      {
+        name: 'clst-auth-store',
+        partialize: (state) => ({
+          user: state.user,
+          accessToken: state.accessToken,
+          refreshToken: state.refreshToken,
+          isAuthenticated: state.isAuthenticated,
+        }),
+      }
+    )
+  )
+);
+
+// src/features/closet/stores/closet.store.ts
+import { create } from 'zustand';
+import { devtools, subscribeWithSelector } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+import type { ClothingItem, ClothingCategory, Season, Occasion } from '@/features/closet/types';
+
+interface ClosetFilters {
+  categories: ClothingCategory[];
+  seasons: Season[];
+  occasions: Occasion[];
+  brands: string[];
+  colors: string[];
+  minPrice?: number;
+  maxPrice?: number;
+  search: string;
+}
+
+interface ClosetState {
+  // State
+  items: ClothingItem[];
+  isLoading: boolean;
+  error: string | null;
+  filters: ClosetFilters;
+  sortBy: 'name' | 'date' | 'wearCount' | 'price';
+  sortOrder: 'asc' | 'desc';
+  viewMode: 'grid' | 'list';
+  selectedItems: string[];
+
+  // Computed
+  filteredItems: ClothingItem[];
+  totalValue: number;
+  itemsByCategory: Record<ClothingCategory, ClothingItem[]>;
+
+  // Actions
+  fetchItems: () => Promise<void>;
+  addItem: (item: Omit<ClothingItem, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateItem: (id: string, updates: Partial<ClothingItem>) => Promise<void>;
+  deleteItem: (id: string) => Promise<void>;
+  deleteMultipleItems: (ids: string[]) => Promise<void>;
+  
+  // Filter Actions
+  setFilter: <K extends keyof ClosetFilters>(key: K, value: ClosetFilters[K]) => void;
+  clearFilters: () => void;
+  
+  // UI Actions
+  setSortBy: (sortBy: ClosetState['sortBy']) => void;
+  setSortOrder: (order: 'asc' | 'desc') => void;
+  setViewMode: (mode: 'grid' | 'list') => void;
+  toggleItemSelection: (id: string) => void;
+  clearSelection: () => void;
+  selectAll: () => void;
+}
+
+const initialFilters: ClosetFilters = {
+  categories: [],
+  seasons: [],
+  occasions: [],
+  brands: [],
+  colors: [],
+  search: '',
+};
+
+export const useClosetStore = create<ClosetState>()(
+  subscribeWithSelector(
+    devtools(
+      immer((set, get) => ({
+        // Initial State
+        items: [],
+        isLoading: false,
+        error: null,
+        filters: initialFilters,
+        sortBy: 'date',
+        sortOrder: 'desc',
+        viewMode: 'grid',
+        selectedItems: [],
+
+        // Computed
+        get filteredItems() {
+          const { items, filters, sortBy, sortOrder } = get();
+          
+          let filtered = items.filter((item) => {
+            // Category filter
+            if (filters.categories.length && !filters.categories.includes(item.category)) {
+              return false;
+            }
+            
+            // Season filter
+            if (filters.seasons.length && !item.seasons.some(s => filters.seasons.includes(s))) {
+              return false;
+            }
+            
+            // Occasion filter
+            if (filters.occasions.length && !item.occasions.some(o => filters.occasions.includes(o))) {
+              return false;
+            }
+            
+            // Brand filter
+            if (filters.brands.length && item.brand && !filters.brands.includes(item.brand)) {
+              return false;
+            }
+            
+            // Color filter
+            if (filters.colors.length && !item.color.some(c => filters.colors.includes(c.name))) {
+              return false;
+            }
+            
+            // Price filter
+            if (filters.minPrice && item.price && item.price < filters.minPrice) {
+              return false;
+            }
+            if (filters.maxPrice && item.price && item.price > filters.maxPrice) {
+              return false;
+            }
+            
+            // Search filter
+            if (filters.search) {
+              const searchLower = filters.search.toLowerCase();
+              return (
+                item.name.toLowerCase().includes(searchLower) ||
+                item.brand?.toLowerCase().includes(searchLower) ||
+                item.tags.some(tag => tag.toLowerCase().includes(searchLower))
+              );
+            }
+            
+            return true;
+          });
+
+          // Sort
+          filtered.sort((a, b) => {
+            let comparison = 0;
+            
+            switch (sortBy) {
+              case 'name':
+                comparison = a.name.localeCompare(b.name);
+                break;
+              case 'date':
+                comparison = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                break;
+              case 'wearCount':
+                comparison = b.wearCount - a.wearCount;
+                break;
+              case 'price':
+                comparison = (b.price || 0) - (a.price || 0);
+                break;
+            }
+            
+            return sortOrder === 'asc' ? -comparison : comparison;
+          });
+
+          return filtered;
+        },
+
+        get totalValue() {
+          return get().items.reduce((sum, item) => sum + (item.price || 0), 0);
+        },
+
+        get itemsByCategory() {
+          const categorized = {} as Record<ClothingCategory, ClothingItem[]>;
+          const categories: ClothingCategory[] = [
+            'tops', 'bottoms', 'dresses', 'outerwear', 
+            'shoes', 'accessories', 'underwear', 'activewear', 
+            'swimwear', 'other'
+          ];
+          
+          categories.forEach(cat => {
+            categorized[cat] = [];
+          });
+          
+          get().items.forEach(item => {
+            categorized[item.category].push(item);
+          });
+          
+          return categorized;
+        },
+
+        // Actions
+        fetchItems: async () => {
+          set((state) => {
+            state.isLoading = true;
+            state.error = null;
+          });
+
+          try {
+            const response = await fetch('/api/closet/items');
+            if (!response.ok) throw new Error('Failed to fetch items');
+            
+            const data = await response.json();
+            
+            set((state) => {
+              state.items = data.items;
+              state.isLoading = false;
+            });
+          } catch (error) {
+            set((state) => {
+              state.error = error instanceof Error ? error.message : 'Failed to fetch items';
+              state.isLoading = false;
+            });
+          }
+        },
+
+        addItem: async (item) => {
+          try {
+            const response = await fetch('/api/closet/items', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(item),
+            });
+            
+            if (!response.ok) throw new Error('Failed to add item');
+            
+            const newItem = await response.json();
+            
+            set((state) => {
+              state.items.push(newItem);
+            });
+          } catch (error) {
+            set((state) => {
+              state.error = error instanceof Error ? error.message : 'Failed to add item';
+            });
+          }
+        },
+
+        updateItem: async (id, updates) => {
+          try {
+            const response = await fetch(`/api/closet/items/${id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updates),
+            });
+            
+            if (!response.ok) throw new Error('Failed to update item');
+            
+            const updatedItem = await response.json();
+            
+            set((state) => {
+              const index = state.items.findIndex(item => item.id === id);
+              if (index !== -1) {
+                state.items[index] = updatedItem;
+              }
+            });
+          } catch (error) {
+            set((state) => {
+              state.error = error instanceof Error ? error.message : 'Failed to update item';
+            });
+          }
+        },
+
+        deleteItem: async (id) => {
+          try {
+            const response = await fetch(`/api/closet/items/${id}`, {
+              method: 'DELETE',
+            });
+            
+            if (!response.ok) throw new Error('Failed to delete item');
+            
+            set((state) => {
+              state.items = state.items.filter(item => item.id !== id);
+              state.selectedItems = state.selectedItems.filter(itemId => itemId !== id);
+            });
+          } catch (error) {
+            set((state) => {
+              state.error = error instanceof Error ? error.message : 'Failed to delete item';
+            });
+          }
+        },
+
+        deleteMultipleItems: async (ids) => {
+          try {
+            const response = await fetch('/api/closet/items/batch-delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids }),
+            });
+            
+            if (!response.ok) throw new Error('Failed to delete items');
+            
+            set((state) => {
+              state.items = state.items.filter(item => !ids.includes(item.id));
+              state.selectedItems = [];
+            });
+          } catch (error) {
+            set((state) => {
+              state.error = error instanceof Error ? error.message : 'Failed to delete items';
+            });
+          }
+        },
+
+        // Filter Actions
+        setFilter: (key, value) =>
+          set((state) => {
+            state.filters[key] = value;
+          }),
+
+        clearFilters: () =>
+          set((state) => {
+            state.filters = initialFilters;
+          }),
+
+        // UI Actions
+        setSortBy: (sortBy) =>
+          set((state) => {
+            state.sortBy = sortBy;
+          }),
+
+        setSortOrder: (order) =>
+          set((state) => {
+            state.sortOrder = order;
+          }),
+
+        setViewMode: (mode) =>
+          set((state) => {
+            state.viewMode = mode;
+          }),
+
+        toggleItemSelection: (id) =>
+          set((state) => {
+            const index = state.selectedItems.indexOf(id);
+            if (index === -1) {
+              state.selectedItems.push(id);
+            } else {
+              state.selectedItems.splice(index, 1);
+            }
+          }),
+
+        clearSelection: () =>
+          set((state) => {
+            state.selectedItems = [];
+          }),
+
+        selectAll: () =>
+          set((state) => {
+            state.selectedItems = get().filteredItems.map(item => item.id);
+          }),
+      }))
+    )
+  )
+);
+
+// Subscribe to changes for analytics
+useClosetStore.subscribe(
+  (state) => state.items.length,
+  (itemCount) => {
+    // Track closet size changes
+    console.log('Closet item count:', itemCount);
+  }
+);
