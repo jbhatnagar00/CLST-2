@@ -1,0 +1,726 @@
+// src/shared/hooks/useOffline.ts
+import { useEffect, useState } from 'react';
+import { useAppStore } from '@/shared/stores/app.store';
+
+export function useOffline() {
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const setOnlineStatus = useAppStore((state) => state.setOnlineStatus);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      setOnlineStatus(true);
+    };
+
+    const handleOffline = () => {
+      setIsOffline(true);
+      setOnlineStatus(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [setOnlineStatus]);
+
+  return isOffline;
+}
+
+// src/shared/hooks/useAnalytics.ts
+import { useCallback } from 'react';
+
+interface AnalyticsEvent {
+  category: string;
+  action: string;
+  label?: string;
+  value?: number;
+  metadata?: Record<string, any>;
+}
+
+export function useAnalytics() {
+  const track = useCallback((event: AnalyticsEvent) => {
+    // In production, this would send to your analytics service
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Analytics]', event);
+    }
+
+    // Example: Google Analytics
+    if (typeof window !== 'undefined' && window.gtag) {
+      window.gtag('event', event.action, {
+        event_category: event.category,
+        event_label: event.label,
+        value: event.value,
+        ...event.metadata,
+      });
+    }
+  }, []);
+
+  const trackPageView = useCallback((path: string) => {
+    track({
+      category: 'Navigation',
+      action: 'page_view',
+      label: path,
+    });
+  }, [track]);
+
+  const trackError = useCallback((error: Error, context?: string) => {
+    track({
+      category: 'Error',
+      action: 'error_occurred',
+      label: context,
+      metadata: {
+        error_message: error.message,
+        error_stack: error.stack,
+      },
+    });
+  }, [track]);
+
+  return {
+    track,
+    trackPageView,
+    trackError,
+  };
+}
+
+// src/shared/hooks/useCache.ts
+import { useCallback, useEffect, useState } from 'react';
+import { CacheService } from '@/shared/services/cache/CacheService';
+
+interface UseCacheOptions {
+  key: string;
+  fetcher: () => Promise<any>;
+  ttl?: number; // Time to live in milliseconds
+  staleWhileRevalidate?: boolean;
+}
+
+export function useCache<T>({ 
+  key, 
+  fetcher, 
+  ttl = 5 * 60 * 1000, // 5 minutes default
+  staleWhileRevalidate = true 
+}: UseCacheOptions) {
+  const [data, setData] = useState<T | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+
+  const cache = CacheService.getInstance();
+
+  const fetchData = useCallback(async (force = false) => {
+    try {
+      // Check cache first
+      if (!force) {
+        const cached = await cache.get<T>(key);
+        if (cached) {
+          setData(cached);
+          setIsLoading(false);
+          
+          // Revalidate in background if stale
+          if (staleWhileRevalidate && cache.isStale(key)) {
+            setIsValidating(true);
+          } else {
+            return;
+          }
+        }
+      }
+
+      // Fetch fresh data
+      const fresh = await fetcher();
+      await cache.set(key, fresh, ttl);
+      setData(fresh);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Unknown error'));
+    } finally {
+      setIsLoading(false);
+      setIsValidating(false);
+    }
+  }, [key, fetcher, ttl, staleWhileRevalidate]);
+
+  const mutate = useCallback(async (newData: T | ((prev: T | null) => T)) => {
+    const updated = typeof newData === 'function' ? newData(data) : newData;
+    setData(updated);
+    await cache.set(key, updated, ttl);
+  }, [key, data, ttl]);
+
+  const invalidate = useCallback(() => {
+    cache.delete(key);
+    return fetchData(true);
+  }, [key, fetchData]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return {
+    data,
+    isLoading,
+    error,
+    isValidating,
+    mutate,
+    invalidate,
+  };
+}
+
+// src/shared/services/cache/CacheService.ts
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+  ttl: number;
+}
+
+export class CacheService {
+  private static instance: CacheService;
+  private memoryCache: Map<string, CacheEntry<any>> = new Map();
+  private dbName = 'clst-cache';
+  private storeName = 'cache-store';
+
+  private constructor() {
+    this.initIndexedDB();
+  }
+
+  static getInstance(): CacheService {
+    if (!CacheService.instance) {
+      CacheService.instance = new CacheService();
+    }
+    return CacheService.instance;
+  }
+
+  private async initIndexedDB(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, 1);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+        if (!db.objectStoreNames.contains(this.storeName)) {
+          db.createObjectStore(this.storeName, { keyPath: 'key' });
+        }
+      };
+    });
+  }
+
+  async get<T>(key: string): Promise<T | null> {
+    // Check memory cache first
+    const memoryEntry = this.memoryCache.get(key);
+    if (memoryEntry && !this.isExpired(memoryEntry)) {
+      return memoryEntry.data;
+    }
+
+    // Check IndexedDB
+    try {
+      const db = await this.initIndexedDB();
+      const transaction = db.transaction([this.storeName], 'readonly');
+      const store = transaction.objectStore(this.storeName);
+      const request = store.get(key);
+
+      return new Promise((resolve) => {
+        request.onsuccess = () => {
+          const entry = request.result;
+          if (entry && !this.isExpired(entry)) {
+            // Update memory cache
+            this.memoryCache.set(key, entry);
+            resolve(entry.data);
+          } else {
+            resolve(null);
+          }
+        };
+        request.onerror = () => resolve(null);
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async set<T>(key: string, data: T, ttl: number): Promise<void> {
+    const entry: CacheEntry<T> = {
+      data,
+      timestamp: Date.now(),
+      ttl,
+    };
+
+    // Update memory cache
+    this.memoryCache.set(key, entry);
+
+    // Update IndexedDB
+    try {
+      const db = await this.initIndexedDB();
+      const transaction = db.transaction([this.storeName], 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+      store.put({ key, ...entry });
+    } catch (error) {
+      console.error('Failed to save to IndexedDB:', error);
+    }
+  }
+
+  delete(key: string): void {
+    this.memoryCache.delete(key);
+    
+    this.initIndexedDB().then(db => {
+      const transaction = db.transaction([this.storeName], 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+      store.delete(key);
+    }).catch(console.error);
+  }
+
+  clear(): void {
+    this.memoryCache.clear();
+    
+    this.initIndexedDB().then(db => {
+      const transaction = db.transaction([this.storeName], 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+      store.clear();
+    }).catch(console.error);
+  }
+
+  isStale(key: string): boolean {
+    const entry = this.memoryCache.get(key);
+    if (!entry) return true;
+    
+    const age = Date.now() - entry.timestamp;
+    return age > entry.ttl * 0.5; // Consider stale after 50% of TTL
+  }
+
+  private isExpired(entry: CacheEntry<any>): boolean {
+    const age = Date.now() - entry.timestamp;
+    return age > entry.ttl;
+  }
+}
+
+// src/shared/hooks/useVirtualScroll.ts
+import { useRef, useCallback, useEffect, useState } from 'react';
+
+interface UseVirtualScrollOptions {
+  itemCount: number;
+  itemHeight: number | ((index: number) => number);
+  containerHeight: number;
+  overscan?: number;
+  onEndReached?: () => void;
+  endReachedThreshold?: number;
+}
+
+interface VirtualItem {
+  index: number;
+  start: number;
+  size: number;
+}
+
+export function useVirtualScroll({
+  itemCount,
+  itemHeight,
+  containerHeight,
+  overscan = 5,
+  onEndReached,
+  endReachedThreshold = 0.8,
+}: UseVirtualScrollOptions) {
+  const [scrollTop, setScrollTop] = useState(0);
+  const [isScrolling, setIsScrolling] = useState(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout>();
+  const hasReachedEndRef = useRef(false);
+
+  // Calculate item positions
+  const getItemOffset = useCallback((index: number): number => {
+    if (typeof itemHeight === 'number') {
+      return index * itemHeight;
+    }
+    
+    let offset = 0;
+    for (let i = 0; i < index; i++) {
+      offset += itemHeight(i);
+    }
+    return offset;
+  }, [itemHeight]);
+
+  const getItemHeight = useCallback((index: number): number => {
+    return typeof itemHeight === 'number' ? itemHeight : itemHeight(index);
+  }, [itemHeight]);
+
+  // Calculate visible range
+  const calculateVisibleRange = useCallback(() => {
+    const startIndex = Math.max(0, 
+      Math.floor(scrollTop / (typeof itemHeight === 'number' ? itemHeight : 100)) - overscan
+    );
+    
+    const endIndex = Math.min(itemCount - 1,
+      Math.ceil((scrollTop + containerHeight) / (typeof itemHeight === 'number' ? itemHeight : 100)) + overscan
+    );
+
+    return { startIndex, endIndex };
+  }, [scrollTop, containerHeight, itemHeight, overscan, itemCount]);
+
+  // Get virtual items
+  const virtualItems = useCallback((): VirtualItem[] => {
+    const { startIndex, endIndex } = calculateVisibleRange();
+    const items: VirtualItem[] = [];
+
+    for (let index = startIndex; index <= endIndex; index++) {
+      items.push({
+        index,
+        start: getItemOffset(index),
+        size: getItemHeight(index),
+      });
+    }
+
+    return items;
+  }, [calculateVisibleRange, getItemOffset, getItemHeight]);
+
+  // Handle scroll
+  const handleScroll = useCallback((e: React.UIEvent<HTMLElement>) => {
+    const target = e.currentTarget;
+    setScrollTop(target.scrollTop);
+    setIsScrolling(true);
+
+    // Clear existing timeout
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+
+    // Set scrolling to false after scroll ends
+    scrollTimeoutRef.current = setTimeout(() => {
+      setIsScrolling(false);
+    }, 150);
+
+    // Check if end reached
+    if (onEndReached && !hasReachedEndRef.current) {
+      const scrollPercentage = (target.scrollTop + target.clientHeight) / target.scrollHeight;
+      if (scrollPercentage > endReachedThreshold) {
+        hasReachedEndRef.current = true;
+        onEndReached();
+      }
+    }
+  }, [onEndReached, endReachedThreshold]);
+
+  // Reset end reached flag when item count changes
+  useEffect(() => {
+    hasReachedEndRef.current = false;
+  }, [itemCount]);
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const totalHeight = typeof itemHeight === 'number' 
+    ? itemCount * itemHeight 
+    : Array.from({ length: itemCount }, (_, i) => getItemHeight(i)).reduce((a, b) => a + b, 0);
+
+  return {
+    virtualItems: virtualItems(),
+    totalHeight,
+    handleScroll,
+    isScrolling,
+  };
+}
+
+// src/shared/utils/helpers.ts
+export function formatCurrency(amount: number, currency = 'USD'): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+  }).format(amount);
+}
+
+export function formatDate(date: string | Date, format: 'short' | 'long' = 'short'): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: format,
+  }).format(d);
+}
+
+export function formatRelativeTime(date: string | Date): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  
+  if (days > 7) {
+    return formatDate(d);
+  } else if (days > 0) {
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  } else if (hours > 0) {
+    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  } else if (minutes > 0) {
+    return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+  } else {
+    return 'Just now';
+  }
+}
+
+export function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout;
+  
+  return function executedFunction(...args: Parameters<T>) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+export function throttle<T extends (...args: any[]) => any>(
+  func: T,
+  limit: number
+): (...args: Parameters<T>) => void {
+  let inThrottle: boolean;
+  
+  return function executedFunction(...args: Parameters<T>) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  };
+}
+
+export function groupBy<T>(array: T[], key: keyof T): Record<string, T[]> {
+  return array.reduce((groups, item) => {
+    const group = String(item[key]);
+    if (!groups[group]) groups[group] = [];
+    groups[group].push(item);
+    return groups;
+  }, {} as Record<string, T[]>);
+}
+
+export function chunk<T>(array: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+}
+
+// src/shared/utils/validators.ts
+export const validators = {
+  email: (value: string): boolean => {
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(value);
+  },
+
+  username: (value: string): boolean => {
+    const regex = /^[a-zA-Z0-9_]{3,20}$/;
+    return regex.test(value);
+  },
+
+  password: (value: string): { valid: boolean; errors: string[] } => {
+    const errors: string[] = [];
+    
+    if (value.length < 8) {
+      errors.push('Password must be at least 8 characters long');
+    }
+    if (!/[A-Z]/.test(value)) {
+      errors.push('Password must contain at least one uppercase letter');
+    }
+    if (!/[a-z]/.test(value)) {
+      errors.push('Password must contain at least one lowercase letter');
+    }
+    if (!/[0-9]/.test(value)) {
+      errors.push('Password must contain at least one number');
+    }
+    
+    return {
+      valid: errors.length === 0,
+      errors,
+    };
+  },
+
+  url: (value: string): boolean => {
+    try {
+      new URL(value);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  hex: (value: string): boolean => {
+    const regex = /^#[0-9A-F]{6}$/i;
+    return regex.test(value);
+  },
+
+  price: (value: number): boolean => {
+    return value >= 0 && Number.isFinite(value);
+  },
+};
+
+// src/shared/utils/constants.ts
+export const CONSTANTS = {
+  APP_NAME: 'CLST',
+  APP_VERSION: '1.0.0',
+  
+  API: {
+    BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+    TIMEOUT: 30000,
+    RETRY_ATTEMPTS: 3,
+  },
+  
+  STORAGE_KEYS: {
+    AUTH_TOKEN: 'clst_auth_token',
+    USER_PREFERENCES: 'clst_user_prefs',
+    THEME: 'clst_theme',
+    LANGUAGE: 'clst_language',
+  },
+  
+  PAGINATION: {
+    DEFAULT_PAGE_SIZE: 20,
+    MAX_PAGE_SIZE: 100,
+  },
+  
+  IMAGE: {
+    MAX_SIZE: 10 * 1024 * 1024, // 10MB
+    ALLOWED_TYPES: ['image/jpeg', 'image/png', 'image/webp'],
+    THUMBNAIL_SIZE: 300,
+  },
+  
+  CACHE: {
+    TTL: {
+      SHORT: 5 * 60 * 1000,      // 5 minutes
+      MEDIUM: 30 * 60 * 1000,     // 30 minutes
+      LONG: 24 * 60 * 60 * 1000,  // 24 hours
+    },
+  },
+  
+  ANALYTICS: {
+    ENABLED: import.meta.env.VITE_ANALYTICS_ENABLED === 'true',
+    GA_ID: import.meta.env.VITE_GA_ID,
+  },
+};
+
+// src/shared/services/api/ApiClient.ts
+import { CONSTANTS } from '@/shared/utils/constants';
+
+interface ApiRequestOptions extends RequestInit {
+  params?: Record<string, any>;
+  timeout?: number;
+  retry?: number;
+}
+
+class ApiClient {
+  private baseURL: string;
+  private defaultHeaders: HeadersInit;
+
+  constructor(baseURL: string = CONSTANTS.API.BASE_URL) {
+    this.baseURL = baseURL;
+    this.defaultHeaders = {
+      'Content-Type': 'application/json',
+    };
+  }
+
+  private async request<T>(
+    endpoint: string,
+    options: ApiRequestOptions = {}
+  ): Promise<T> {
+    const {
+      params,
+      timeout = CONSTANTS.API.TIMEOUT,
+      retry = CONSTANTS.API.RETRY_ATTEMPTS,
+      headers,
+      ...fetchOptions
+    } = options;
+
+    // Build URL with params
+    const url = new URL(`${this.baseURL}${endpoint}`);
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          url.searchParams.append(key, String(value));
+        }
+      });
+    }
+
+    // Merge headers
+    const requestHeaders = {
+      ...this.defaultHeaders,
+      ...headers,
+    };
+
+    // Add auth token if available
+    const token = localStorage.getItem(CONSTANTS.STORAGE_KEYS.AUTH_TOKEN);
+    if (token) {
+      requestHeaders['Authorization'] = `Bearer ${token}`;
+    }
+
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(url.toString(), {
+        ...fetchOptions,
+        headers: requestHeaders,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      // Retry logic
+      if (retry > 0 && error.name !== 'AbortError') {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return this.request(endpoint, { ...options, retry: retry - 1 });
+      }
+
+      throw error;
+    }
+  }
+
+  get<T>(endpoint: string, options?: ApiRequestOptions): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'GET' });
+  }
+
+  post<T>(endpoint: string, data?: any, options?: ApiRequestOptions): Promise<T> {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  put<T>(endpoint: string, data?: any, options?: ApiRequestOptions): Promise<T> {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: 'PUT',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  patch<T>(endpoint: string, data?: any, options?: ApiRequestOptions): Promise<T> {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  delete<T>(endpoint: string, options?: ApiRequestOptions): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'DELETE' });
+  }
+}
+
+export const apiClient = new ApiClient();
