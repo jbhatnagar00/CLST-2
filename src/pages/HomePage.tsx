@@ -66,7 +66,7 @@ const HomePage = () => {
           </h1>
           <p style={{ 
             fontSize: 'clamp(1.25rem, 3vw, 1.75rem)', 
-            color: '#666', 
+            color: '#333', 
             marginBottom: '3rem' 
           }}>
             Your Closet's Digital Twin
