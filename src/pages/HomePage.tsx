@@ -127,9 +127,8 @@ const HomePage = () => {
               description="Organize your wardrobe digitally. Upload photos and categorize items."
               icon={
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2L20 7V21H4V7L12 2Z" />
-                  <path d="M12 2V7" />
-                  <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+                  <path d="M12 2C11 2 10 3 10 4C10 5 11 6 12 6C13 6 14 5 14 4C14 3 13 2 12 2Z" />
+                  <path d="M12 6L4 14V22H20V14L12 6Z" />
                 </svg>
               }
               link="/closet"
@@ -156,7 +155,6 @@ const HomePage = () => {
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="5" y="7" width="14" height="14" rx="1" />
                   <path d="M9 7V5C9 3.895 9.895 3 11 3H13C14.105 3 15 3.895 15 5V7" />
-                  <line x1="12" y1="12" x2="12" y2="16" />
                 </svg>
               }
               link="/marketplace"
