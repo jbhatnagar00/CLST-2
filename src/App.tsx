@@ -338,7 +338,7 @@ const Footer = () => (
       maxWidth: '1200px',
       margin: '0 auto'
     }}>
-      <div>© 2025 CLST. All rights reserved.</div>
+      <div>© 2025 CLST</div>
       <div>J.B Goods™</div>
     </div>
   </footer>
