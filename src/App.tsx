@@ -206,14 +206,20 @@ const Navigation = () => {
 // Footer component - Simplified to just copyright
 const Footer = () => (
   <footer style={{
-    marginTop: 'auto',
-    padding: '2rem',
-    textAlign: 'center',
-    borderTop: '1px solid #e5e5e5',
-    color: '#666',
-    fontSize: '0.875rem'
+    marginTop: 'auto'
   }}>
-    © 2025 CLST. All rights reserved.
+    <div style={{
+      height: '2px',
+      backgroundColor: 'black'
+    }} />
+    <div style={{
+      padding: '2rem',
+      textAlign: 'center',
+      color: '#666',
+      fontSize: '0.875rem'
+    }}>
+      © 2025 CLST. All rights reserved.
+    </div>
   </footer>
 )
 
