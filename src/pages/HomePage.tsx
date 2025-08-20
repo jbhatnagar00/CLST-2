@@ -1,100 +1,46 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 
-// Feature card component with accessibility
+// Feature Card Component
 const FeatureCard = ({ 
   title, 
   description, 
   icon, 
-  link,
-  color = '#000'
-}: {
+  link, 
+  color 
+}: { 
   title: string
   description: string
   icon: string
   link: string
-  color?: string
+  color: string
 }) => (
-  <Link 
-    to={link} 
-    style={{ textDecoration: 'none', color: 'inherit' }}
-    aria-label={`Go to ${title}`}
-  >
-    <article style={{ 
-      padding: '2rem', 
-      border: '2px solid black', 
-      borderRadius: '0.5rem',
-      cursor: 'pointer',
-      transition: 'all 0.2s ease',
+  <Link to={link} style={{ textDecoration: 'none', color: 'inherit' }}>
+    <div style={{
+      padding: '1.5rem',
       backgroundColor: 'white',
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column'
+      borderRadius: '0.5rem',
+      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+      transition: 'all 0.3s',
+      cursor: 'pointer',
+      border: '2px solid transparent',
+      height: '100%'
     }}
     onMouseEnter={(e) => {
       e.currentTarget.style.transform = 'translateY(-4px)'
-      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'
+      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)'
+      e.currentTarget.style.borderColor = color
     }}
     onMouseLeave={(e) => {
       e.currentTarget.style.transform = 'translateY(0)'
-      e.currentTarget.style.boxShadow = 'none'
-    }}
-    onFocus={(e) => {
-      e.currentTarget.style.outline = '3px solid black'
-      e.currentTarget.style.outlineOffset = '2px'
-    }}
-    onBlur={(e) => {
-      e.currentTarget.style.outline = 'none'
-    }}
-    >
-      <div style={{ 
-        fontSize: '3rem', 
-        marginBottom: '1rem',
-        color 
-      }}
-      role="img"
-      aria-label={icon}
-      >
-        {icon}
-      </div>
-      <h3 style={{ marginBottom: '0.5rem', fontSize: '1.25rem' }}>{title}</h3>
-      <p style={{ color: '#666', fontSize: '0.9rem', flex: 1 }}>{description}</p>
-    </article>
-  </Link>
-)
-
-// Stats component
-const Stats = () => (
-  <section style={{
-    padding: '4rem 2rem',
-    backgroundColor: '#fafafa',
-    textAlign: 'center'
-  }}>
-    <div style={{
-      maxWidth: '1200px',
-      margin: '0 auto',
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-      gap: '2rem'
+      e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)'
+      e.currentTarget.style.borderColor = 'transparent'
     }}>
-      <div>
-        <div style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>500K+</div>
-        <div style={{ color: '#666' }}>Digital Closets</div>
-      </div>
-      <div>
-        <div style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>2M+</div>
-        <div style={{ color: '#666' }}>Outfits Created</div>
-      </div>
-      <div>
-        <div style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>100K+</div>
-        <div style={{ color: '#666' }}>Items Traded</div>
-      </div>
-      <div>
-        <div style={{ fontSize: '2.5rem', fontWeight: 'bold' }}>4.9★</div>
-        <div style={{ color: '#666' }}>User Rating</div>
-      </div>
+      <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem', textAlign: 'center' }}>{icon}</div>
+      <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', textAlign: 'center' }}>{title}</h3>
+      <p style={{ color: '#666', fontSize: '0.875rem', textAlign: 'center' }}>{description}</p>
     </div>
-  </section>
+  </Link>
 )
 
 const HomePage = () => {
@@ -123,16 +69,14 @@ const HomePage = () => {
             color: '#666', 
             marginBottom: '3rem' 
           }}>
-            Your Digital Fashion Closet
+            Your Closet's Digital Twin
           </p>
           
           <div style={{
             display: 'flex',
-            gap: '1rem',
-            justifyContent: 'center',
-            flexWrap: 'wrap'
+            justifyContent: 'center'
           }}>
-            <Link to="/closet">
+            <Link to="/auth/login">
               <button style={{
                 padding: '1rem 2rem',
                 fontSize: '1.125rem',
@@ -141,138 +85,92 @@ const HomePage = () => {
                 border: 'none',
                 borderRadius: '0.25rem',
                 cursor: 'pointer',
-                transition: 'transform 0.2s',
-                fontWeight: 'bold'
+                transition: 'transform 0.2s'
               }}
               onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
               onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
               >
-                Get Started
+                Log In
               </button>
             </Link>
-            <button style={{
-              padding: '1rem 2rem',
-              fontSize: '1.125rem',
-              backgroundColor: 'white',
-              color: 'black',
-              border: '2px solid black',
-              borderRadius: '0.25rem',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              fontWeight: 'bold'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'black'
-              e.currentTarget.style.color = 'white'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'white'
-              e.currentTarget.style.color = 'black'
-            }}
-            >
-              Learn More
-            </button>
           </div>
         </div>
       </section>
 
-      {/* Features Grid */}
+      {/* Features Section */}
       <section style={{ padding: '4rem 2rem' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <h2 style={{ 
-            textAlign: 'center', 
             fontSize: '2.5rem', 
+            textAlign: 'center', 
             marginBottom: '3rem' 
           }}>
-            Everything You Need for Your Digital Wardrobe
+            Everything You Need to Manage Your Style
           </h2>
           
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
-            gap: '2rem'
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(5, 1fr)',
+            gap: '1.5rem',
+            '@media (max-width: 1024px)': {
+              gridTemplateColumns: 'repeat(3, 1fr)'
+            },
+            '@media (max-width: 768px)': {
+              gridTemplateColumns: 'repeat(2, 1fr)'
+            },
+            '@media (max-width: 480px)': {
+              gridTemplateColumns: '1fr'
+            }
           }}>
             <FeatureCard 
               title="Digital Closet" 
-              description="Organize and manage your entire wardrobe digitally. Track wear counts, plan outfits, and never forget what you own."
-              icon="👕"
+              description="Organize your wardrobe digitally. Upload photos and categorize items."
+              icon="👔"
               link="/closet"
               color="#2563eb"
             />
             <FeatureCard 
-              title="Create Outfits" 
-              description="Mix and match items to create perfect outfits. Plan your weekly wardrobe based on weather and occasions."
-              icon="👗"
+              title="Outfit Planner" 
+              description="Mix and match your clothes to create perfect outfits."
+              icon="👖"
               link="/outfits"
               color="#dc2626"
             />
             <FeatureCard 
               title="Marketplace" 
-              description="Buy and sell pre-loved fashion items. Give your clothes a second life and find unique pieces."
+              description="Buy and sell pre-loved fashion items with the community."
               icon="🛍️"
               link="/marketplace"
               color="#059669"
             />
             <FeatureCard 
               title="Fashion Trends" 
-              description="Stay updated with the latest trends, seasonal colors, and style inspiration from around the world."
+              description="Stay updated with the latest trends and style inspiration."
               icon="📈"
               link="/trends"
               color="#7c3aed"
             />
             <FeatureCard 
               title="Style Challenges" 
-              description="Join weekly style challenges, share your outfits, and get inspired by the community."
+              description="Join weekly challenges and get inspired by others."
               icon="🏆"
               link="/challenges"
               color="#ea580c"
-            />
-            <FeatureCard 
-              title="Sustainability" 
-              description="Track your fashion footprint, reduce waste, and make more conscious wardrobe decisions."
-              icon="🌱"
-              link="/sustainability"
-              color="#059669"
             />
           </div>
         </div>
       </section>
 
-      {/* Stats Section */}
-      <Stats />
-
-      {/* CTA Section */}
-      <section style={{ 
-        padding: '4rem 2rem', 
+      {/* Simple Copyright Footer */}
+      <footer style={{ 
+        padding: '2rem', 
         textAlign: 'center',
-        backgroundColor: 'black',
-        color: 'white'
+        borderTop: '1px solid #e5e5e5',
+        color: '#666',
+        fontSize: '0.875rem'
       }}>
-        <h2 style={{ fontSize: '2rem', marginBottom: '1rem' }}>
-          Ready to Transform Your Wardrobe?
-        </h2>
-        <p style={{ marginBottom: '2rem', opacity: 0.9 }}>
-          Join thousands of fashion-forward individuals managing their style digitally.
-        </p>
-        <Link to="/closet">
-          <button style={{
-            padding: '1rem 2rem',
-            fontSize: '1.125rem',
-            backgroundColor: 'white',
-            color: 'black',
-            border: 'none',
-            borderRadius: '0.25rem',
-            cursor: 'pointer',
-            fontWeight: 'bold',
-            transition: 'transform 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-          >
-            Start Free Today
-          </button>
-        </Link>
-      </section>
+        © 2024 CLST. All rights reserved.
+      </footer>
     </>
   )
 }
