@@ -50,6 +50,28 @@ const HomePage = () => {
 
   return (
     <>
+      <style>{`
+        @keyframes smoothLoop {
+          0% {
+            transform: translateX(100%);
+          }
+          100% {
+            transform: translateX(-100%);
+          }
+        }
+        
+        .loop-container {
+          overflow: hidden;
+          width: 100%;
+        }
+        
+        .loop-text {
+          display: inline-block;
+          animation: smoothLoop 5s linear infinite;
+          white-space: nowrap;
+        }
+      `}</style>
+
       {/* Hero Section */}
       <section style={{ 
         padding: '4rem 2rem', 
@@ -57,13 +79,18 @@ const HomePage = () => {
         backgroundColor: '#f5f5f5'
       }}>
         <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <h1 style={{ 
-            fontSize: 'clamp(2.5rem, 5vw, 4rem)', 
-            marginBottom: '1rem',
-            lineHeight: 1.2 
-          }}>
-            Welcome To CLST
-          </h1>
+          <div className="loop-container">
+            <h1 
+              className="loop-text"
+              style={{ 
+                fontSize: 'clamp(2.5rem, 5vw, 4rem)', 
+                marginBottom: '1rem',
+                lineHeight: 1.2 
+              }}
+            >
+              Welcome To CLST
+            </h1>
+          </div>
           <p style={{ 
             fontSize: 'clamp(1.25rem, 3vw, 1.75rem)', 
             color: '#333', 
