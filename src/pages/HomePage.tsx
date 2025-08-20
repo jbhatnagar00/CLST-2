@@ -62,7 +62,7 @@ const HomePage = () => {
             marginBottom: '1rem',
             lineHeight: 1.2 
           }}>
-            Welcome to CLST
+            Welcome To CLST
           </h1>
           <p style={{ 
             fontSize: 'clamp(1.25rem, 3vw, 1.75rem)', 
