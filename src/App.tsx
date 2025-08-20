@@ -151,22 +151,21 @@ const Navigation = () => {
 
   return (
     <nav style={{ 
-      padding: '1rem', 
       borderBottom: '2px solid black',
       position: 'sticky',
       top: 0,
       backgroundColor: 'white',
       zIndex: 1000,
       width: '100%',
-      marginLeft: 0,
-      marginRight: 0
+      boxSizing: 'border-box'
     }}>
       <div style={{
         maxWidth: '1200px',
         margin: '0 auto',
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center'
+        alignItems: 'center',
+        padding: '1rem'
       }}>
         <Link to="/" style={{ 
           fontSize: '1.5rem', 
@@ -322,12 +321,12 @@ const Footer = () => (
     marginTop: 'auto',
     backgroundColor: 'white',
     width: '100%',
-    marginLeft: 0,
-    marginRight: 0
+    boxSizing: 'border-box'
   }}>
     <div style={{
       height: '2px',
-      backgroundColor: 'black'
+      backgroundColor: 'black',
+      width: '100%'
     }} />
     <div style={{
       padding: '2rem',
@@ -349,6 +348,25 @@ const Footer = () => (
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+
+  // Add global styles
+  React.useEffect(() => {
+    const style = document.createElement('style')
+    style.innerHTML = `
+      body {
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+      }
+      * {
+        box-sizing: border-box;
+      }
+    `
+    document.head.appendChild(style)
+    return () => {
+      document.head.removeChild(style)
+    }
+  }, [])
 
   // Check authentication state on app load
   const checkAuthState = async () => {
@@ -399,15 +417,18 @@ function App() {
             fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             display: 'flex',
             flexDirection: 'column',
-            overflowX: 'hidden'
+            margin: 0,
+            padding: 0,
+            width: '100%',
+            overflowX: 'hidden',
+            position: 'relative'
           }}>
             <Navigation />
             <main style={{ 
               flex: 1,
               backgroundColor: '#f5f5f5',
               width: '100%',
-              marginLeft: 0,
-              marginRight: 0
+              boxSizing: 'border-box'
             }}>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
