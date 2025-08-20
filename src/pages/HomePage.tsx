@@ -77,22 +77,11 @@ const HomePage = () => {
           left: 50%;
           top: 0;
           transform-origin: 0 290px;
-        }
-        
-        .welcome-word, .to-word, .clst-word {
           transition: color 0.3s ease;
         }
         
-        .loop-container:hover .welcome-word {
+        .loop-container:hover .loop-text span {
           color: #3b82f6;
-        }
-        
-        .loop-container:hover .to-word {
-          color: #ea580c;
-        }
-        
-        .loop-container:hover .clst-word {
-          color: #dc2626;
         }
       `}</style>
 
@@ -114,7 +103,7 @@ const HomePage = () => {
                   lineHeight: 1.2
                 }}
               >
-                <span className="welcome-word">Welcome</span> <span className="to-word">To</span> <span className="clst-word">CLST</span>&#8201;
+                Welcome To CLST&#8201;
               </span>
             ))}
           </div>
