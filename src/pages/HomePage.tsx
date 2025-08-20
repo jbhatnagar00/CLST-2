@@ -6,41 +6,37 @@ const FeatureCard = ({
   title, 
   description, 
   icon, 
-  link, 
   color 
 }: { 
   title: string
   description: string
   icon: React.ReactNode
-  link: string
   color: string
 }) => (
-  <Link to={link} style={{ textDecoration: 'none', color: 'inherit' }}>
-    <div style={{
-      padding: '1.5rem',
-      backgroundColor: 'white',
-      borderRadius: '0.5rem',
-      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-      transition: 'all 0.3s',
-      cursor: 'pointer',
-      border: '2px solid transparent',
-      height: '100%'
-    }}
-    onMouseEnter={(e) => {
-      e.currentTarget.style.transform = 'translateY(-4px)'
-      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)'
-      e.currentTarget.style.borderColor = color
-    }}
-    onMouseLeave={(e) => {
-      e.currentTarget.style.transform = 'translateY(0)'
-      e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)'
-      e.currentTarget.style.borderColor = 'transparent'
-    }}>
-      <div style={{ marginBottom: '0.75rem', textAlign: 'center' }}>{icon}</div>
-      <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', textAlign: 'center' }}>{title}</h3>
-      <p style={{ color: '#666', fontSize: '0.875rem', textAlign: 'center' }}>{description}</p>
-    </div>
-  </Link>
+  <div style={{
+    padding: '1.5rem',
+    backgroundColor: 'white',
+    borderRadius: '0.5rem',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+    transition: 'all 0.3s',
+    cursor: 'pointer',
+    border: '2px solid transparent',
+    height: '100%'
+  }}
+  onMouseEnter={(e) => {
+    e.currentTarget.style.transform = 'translateY(-4px)'
+    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)'
+    e.currentTarget.style.borderColor = color
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.transform = 'translateY(0)'
+    e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)'
+    e.currentTarget.style.borderColor = 'transparent'
+  }}>
+    <div style={{ marginBottom: '0.75rem', textAlign: 'center' }}>{icon}</div>
+    <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', textAlign: 'center' }}>{title}</h3>
+    <p style={{ color: '#666', fontSize: '0.875rem', textAlign: 'center' }}>{description}</p>
+  </div>
 )
 
 const HomePage = () => {
@@ -179,7 +175,6 @@ const HomePage = () => {
                   <path d="M12 9C12 9 4 11 4 14C4 15 6 16 6 16L18 16C18 16 20 15 20 14C20 11 12 9 12 9Z" />
                 </svg>
               }
-              link="/closet"
               color="#2563eb"
             />
             <FeatureCard 
@@ -193,7 +188,6 @@ const HomePage = () => {
                   <rect x="14" y="14" width="7" height="7" rx="1" />
                 </svg>
               }
-              link="/outfits"
               color="#dc2626"
             />
             <FeatureCard 
@@ -205,7 +199,6 @@ const HomePage = () => {
                   <path d="M9 7V5C9 3.895 9.895 3 11 3H13C14.105 3 15 3.895 15 5V7" />
                 </svg>
               }
-              link="/marketplace"
               color="#059669"
             />
             <FeatureCard 
@@ -216,8 +209,7 @@ const HomePage = () => {
                   <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                 </svg>
               }
-              link="/trends"
-              color="#7c3aed"
+              color="#3b82f6"
             />
             <FeatureCard 
               title="Style Challenges" 
@@ -227,7 +219,6 @@ const HomePage = () => {
                   <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
                 </svg>
               }
-              link="/challenges"
               color="#ea580c"
             />
           </div>
