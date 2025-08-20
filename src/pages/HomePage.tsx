@@ -11,7 +11,7 @@ const FeatureCard = ({
 }: { 
   title: string
   description: string
-  icon: string
+  icon: React.ReactNode
   link: string
   color: string
 }) => (
@@ -36,7 +36,7 @@ const FeatureCard = ({
       e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)'
       e.currentTarget.style.borderColor = 'transparent'
     }}>
-      <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem', textAlign: 'center' }}>{icon}</div>
+      <div style={{ marginBottom: '0.75rem', textAlign: 'center' }}>{icon}</div>
       <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', textAlign: 'center' }}>{title}</h3>
       <p style={{ color: '#666', fontSize: '0.875rem', textAlign: 'center' }}>{description}</p>
     </div>
@@ -125,35 +125,69 @@ const HomePage = () => {
             <FeatureCard 
               title="Digital Closet" 
               description="Organize your wardrobe digitally. Upload photos and categorize items."
-              icon="👔"
+              icon={
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="4" y="4" width="16" height="16" rx="1" />
+                  <line x1="4" y1="10" x2="20" y2="10" />
+                  <line x1="10" y1="4" x2="10" y2="20" />
+                  <line x1="14" y1="4" x2="14" y2="20" />
+                </svg>
+              }
               link="/closet"
               color="#2563eb"
             />
             <FeatureCard 
               title="Outfit Planner" 
-              description="Plan and create outfits based on the weather forecast."
-              icon="👖"
+              description="Plan and create outfits based on the weather."
+              icon={
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+              }
               link="/outfits"
               color="#dc2626"
             />
             <FeatureCard 
               title="Marketplace" 
               description="Buy and sell pre-loved fashion items with the community."
-              icon="🛍️"
+              icon={
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="2" y="7" width="20" height="14" rx="1" />
+                  <path d="M12 2L2 7v14h20V7L12 2z" />
+                  <line x1="2" y1="7" x2="22" y2="7" />
+                  <line x1="12" y1="2" x2="12" y2="7" />
+                </svg>
+              }
               link="/marketplace"
               color="#059669"
             />
             <FeatureCard 
               title="Fashion Trends" 
               description="Stay updated with the latest trends and style inspiration."
-              icon="📈"
+              icon={
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="1" />
+                  <polyline points="7 13 10 10 14 14 17 11" />
+                  <line x1="17" y1="11" x2="17" y2="17" />
+                  <line x1="17" y1="17" x2="11" y2="17" />
+                </svg>
+              }
               link="/trends"
               color="#7c3aed"
             />
             <FeatureCard 
               title="Style Challenges" 
               description="Join weekly challenges and get inspired by others."
-              icon="🏆"
+              icon={
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="5" y="12" width="4" height="9" rx="1" />
+                  <rect x="10" y="7" width="4" height="14" rx="1" />
+                  <rect x="15" y="3" width="4" height="18" rx="1" />
+                </svg>
+              }
               link="/challenges"
               color="#ea580c"
             />
