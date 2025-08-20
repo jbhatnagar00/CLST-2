@@ -1,5 +1,34 @@
-import React, { Suspense, lazy } from 'react'
-import { BrowserRouter as Router, Routes, Route, Link, NavLink } from 'react-router-dom'
+import React, { Suspense, lazy, createContext, useContext, useState, useEffect } from 'react'
+import { BrowserRouter as Router, Routes, Route, Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+
+// TODO: Uncomment these imports when Amplify is configured
+// import { Amplify } from 'aws-amplify'
+// import { getCurrentUser, signOut } from 'aws-amplify/auth'
+// import awsconfig from './aws-exports'
+
+// TODO: Configure Amplify (uncomment when aws-exports.js is available)
+// Amplify.configure(awsconfig)
+
+// Lazy load components
+const ProtectedRoute = lazy(() => import('./ProtectedRoute'))
+
+// Create Auth Context
+interface AuthContextType {
+  isAuthenticated: boolean
+  setIsAuthenticated: (value: boolean) => void
+  checkAuthState: () => Promise<void>
+  logout: () => Promise<void>
+}
+
+const AuthContext = createContext<AuthContextType>({
+  isAuthenticated: false,
+  setIsAuthenticated: () => {},
+  checkAuthState: async () => {},
+  logout: async () => {}
+})
+
+// Custom hook to use auth context
+const useAuth = () => useContext(AuthContext)
 
 // Lazy load page components for better performance
 const HomePage = lazy(() => import('./pages/HomePage'))
@@ -99,6 +128,18 @@ class ErrorBoundary extends React.Component<
 // Navigation component with active states
 const Navigation = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { isAuthenticated } = useAuth()
+  const isHomePage = location.pathname === '/'
+
+  const handleNavClick = (e: React.MouseEvent, path: string) => {
+    // If user is not authenticated and on home page, redirect to login
+    if (!isAuthenticated && isHomePage) {
+      e.preventDefault()
+      navigate('/auth/login')
+    }
+  }
 
   const navLinkStyle = ({ isActive }: { isActive: boolean }) => ({
     textDecoration: 'none',
@@ -155,10 +196,34 @@ const Navigation = () => {
         }}
         className="desktop-nav"
         >
-          <NavLink to="/closet" style={navLinkStyle}>My Closet</NavLink>
-          <NavLink to="/outfits" style={navLinkStyle}>Outfits</NavLink>
-          <NavLink to="/marketplace" style={navLinkStyle}>Marketplace</NavLink>
-          <NavLink to="/trends" style={navLinkStyle}>Trends</NavLink>
+          <NavLink 
+            to="/closet" 
+            style={navLinkStyle}
+            onClick={(e) => handleNavClick(e, '/closet')}
+          >
+            My Closet
+          </NavLink>
+          <NavLink 
+            to="/outfits" 
+            style={navLinkStyle}
+            onClick={(e) => handleNavClick(e, '/outfits')}
+          >
+            Outfits
+          </NavLink>
+          <NavLink 
+            to="/marketplace" 
+            style={navLinkStyle}
+            onClick={(e) => handleNavClick(e, '/marketplace')}
+          >
+            Marketplace
+          </NavLink>
+          <NavLink 
+            to="/trends" 
+            style={navLinkStyle}
+            onClick={(e) => handleNavClick(e, '/trends')}
+          >
+            Trends
+          </NavLink>
         </div>
 
         {/* Mobile Menu Button */}
@@ -193,16 +258,44 @@ const Navigation = () => {
         className="mobile-nav"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <NavLink to="/closet" style={navLinkStyle} onClick={() => setIsMobileMenuOpen(false)}>
+            <NavLink 
+              to="/closet" 
+              style={navLinkStyle} 
+              onClick={(e) => {
+                handleNavClick(e, '/closet')
+                if (isAuthenticated || !isHomePage) setIsMobileMenuOpen(false)
+              }}
+            >
               My Closet
             </NavLink>
-            <NavLink to="/outfits" style={navLinkStyle} onClick={() => setIsMobileMenuOpen(false)}>
+            <NavLink 
+              to="/outfits" 
+              style={navLinkStyle} 
+              onClick={(e) => {
+                handleNavClick(e, '/outfits')
+                if (isAuthenticated || !isHomePage) setIsMobileMenuOpen(false)
+              }}
+            >
               Outfits
             </NavLink>
-            <NavLink to="/marketplace" style={navLinkStyle} onClick={() => setIsMobileMenuOpen(false)}>
+            <NavLink 
+              to="/marketplace" 
+              style={navLinkStyle} 
+              onClick={(e) => {
+                handleNavClick(e, '/marketplace')
+                if (isAuthenticated || !isHomePage) setIsMobileMenuOpen(false)
+              }}
+            >
               Marketplace
             </NavLink>
-            <NavLink to="/trends" style={navLinkStyle} onClick={() => setIsMobileMenuOpen(false)}>
+            <NavLink 
+              to="/trends" 
+              style={navLinkStyle} 
+              onClick={(e) => {
+                handleNavClick(e, '/trends')
+                if (isAuthenticated || !isHomePage) setIsMobileMenuOpen(false)
+              }}
+            >
               Trends
             </NavLink>
           </div>
@@ -248,35 +341,101 @@ const Footer = () => (
 
 // Main App component with performance optimizations
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+
+  // Check authentication state on app load
+  const checkAuthState = async () => {
+    try {
+      // TODO: Replace with Amplify Auth when configured
+      // const user = await getCurrentUser()
+      // setIsAuthenticated(true)
+      
+      // For now, check localStorage (temporary solution)
+      const authToken = localStorage.getItem('authToken')
+      setIsAuthenticated(!!authToken)
+    } catch (error) {
+      setIsAuthenticated(false)
+    } finally {
+      setIsCheckingAuth(false)
+    }
+  }
+
+  // Logout function
+  const logout = async () => {
+    try {
+      // TODO: Replace with Amplify Auth when configured
+      // await signOut()
+      
+      // For now, clear localStorage
+      localStorage.removeItem('authToken')
+      setIsAuthenticated(false)
+    } catch (error) {
+      console.error('Error signing out:', error)
+    }
+  }
+
+  useEffect(() => {
+    checkAuthState()
+  }, [])
+
+  // Show loading while checking auth
+  if (isCheckingAuth) {
+    return <PageLoader />
+  }
+
   return (
-    <ErrorBoundary>
-      <Router>
-        <div style={{ 
-          minHeight: '100vh', 
-          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
-          <Navigation />
-          <main style={{ flex: 1 }}>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/closet" element={<ClosetPage />} />
-                <Route path="/outfits" element={<OutfitsPage />} />
-                <Route path="/marketplace" element={<MarketplacePage />} />
-                <Route path="/trends" element={<TrendsPage />} />
-                <Route path="/auth/login" element={<LoginPage />} />
-                <Route path="/auth/register" element={<RegisterPage />} />
-                <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
-              </Routes>
-            </Suspense>
-          </main>
-          <Footer />
-        </div>
-      </Router>
-    </ErrorBoundary>
+    <AuthContext.Provider value={{ isAuthenticated, setIsAuthenticated, checkAuthState, logout }}>
+      <ErrorBoundary>
+        <Router>
+          <div style={{ 
+            minHeight: '100vh', 
+            fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            display: 'flex',
+            flexDirection: 'column',
+            backgroundColor: '#f5f5f5'
+          }}>
+            <Navigation />
+            <main style={{ flex: 1 }}>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  {/* Public Routes */}
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/auth/login" element={<LoginPage />} />
+                  <Route path="/auth/register" element={<RegisterPage />} />
+                  <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
+                  
+                  {/* Protected Routes */}
+                  <Route path="/closet" element={
+                    <ProtectedRoute>
+                      <ClosetPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/outfits" element={
+                    <ProtectedRoute>
+                      <OutfitsPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/marketplace" element={
+                    <ProtectedRoute>
+                      <MarketplacePage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/trends" element={
+                    <ProtectedRoute>
+                      <TrendsPage />
+                    </ProtectedRoute>
+                  } />
+                </Routes>
+              </Suspense>
+            </main>
+            <Footer />
+          </div>
+        </Router>
+      </ErrorBoundary>
+    </AuthContext.Provider>
   )
 }
 
 export default App
+export { AuthContext, useAuth }
