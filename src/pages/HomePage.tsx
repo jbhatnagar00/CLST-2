@@ -131,7 +131,7 @@ const HomePage = () => {
             />
             <FeatureCard 
               title="Outfit Planner" 
-              description="Plan and create outfits based on the weather."
+              description="Plan and create outfits based on the weather forecast."
               icon="👖"
               link="/outfits"
               color="#dc2626"
