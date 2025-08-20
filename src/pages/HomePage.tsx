@@ -72,7 +72,7 @@ const HomePage = () => {
         
         .loop-text {
           display: inline-block;
-          animation: smoothLoop 20s linear infinite;
+          animation: smoothLoop 40s linear infinite;
           white-space: nowrap;
         }
       `}</style>
