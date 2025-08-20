@@ -319,7 +319,7 @@ const Navigation = () => {
 const Footer = () => (
   <footer style={{
     marginTop: 'auto',
-    backgroundColor: 'white',
+    backgroundColor: '#f5f5f5',
     width: '100%',
     boxSizing: 'border-box'
   }}>
@@ -336,8 +336,7 @@ const Footer = () => (
       color: 'black',
       fontSize: '1rem',
       maxWidth: '1200px',
-      margin: '0 auto',
-      backgroundColor: '#f5f5f5'
+      margin: '0 auto'
     }}>
       <div>© 2025 CLST</div>
       <div>J.B Goods™</div>
