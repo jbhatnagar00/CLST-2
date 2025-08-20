@@ -152,8 +152,10 @@ const Navigation = () => {
   return (
     <nav style={{ 
       borderBottom: '2px solid black',
-      position: 'sticky',
+      position: 'fixed',
       top: 0,
+      left: 0,
+      right: 0,
       backgroundColor: 'white',
       zIndex: 9999,
       width: '100%',
@@ -428,7 +430,8 @@ function App() {
               flex: 1,
               backgroundColor: '#f5f5f5',
               width: '100%',
-              boxSizing: 'border-box'
+              boxSizing: 'border-box',
+              paddingTop: '70px'
             }}>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
