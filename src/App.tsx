@@ -165,7 +165,7 @@ const Navigation = () => {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '1rem'
+        padding: '1.125rem'
       }}>
         <Link to="/" style={{ 
           fontSize: '1.5rem', 
@@ -336,7 +336,8 @@ const Footer = () => (
       color: 'black',
       fontSize: '1rem',
       maxWidth: '1200px',
-      margin: '0 auto'
+      margin: '0 auto',
+      backgroundColor: '#f5f5f5'
     }}>
       <div>© 2025 CLST</div>
       <div>J.B Goods™</div>
