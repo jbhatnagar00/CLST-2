@@ -128,7 +128,7 @@ const HomePage = () => {
               icon={
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 9C10.896 9 10 8.104 10 7C10 5.896 10.896 5 12 5C13.104 5 14 5.896 14 7C14 8.104 13.104 9 12 9Z" />
-                  <path d="M12 9L6 15L8 20H16L18 15L12 9Z" />
+                  <path d="M12 9C12 9 4 11 4 14C4 15 6 16 6 16L18 16C18 16 20 15 20 14C20 11 12 9 12 9Z" />
                 </svg>
               }
               link="/closet"
