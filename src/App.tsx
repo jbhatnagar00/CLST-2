@@ -156,7 +156,7 @@ const Navigation = () => {
       top: 0,
       left: 0,
       right: 0,
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      backgroundColor: 'rgba(255, 255, 255, 0.85)',
       backdropFilter: 'blur(8px)',
       WebkitBackdropFilter: 'blur(8px)',
       zIndex: 9999,
