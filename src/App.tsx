@@ -328,7 +328,7 @@ const Footer = () => (
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      color: '#666',
+      color: '#333',
       fontSize: '0.875rem',
       maxWidth: '1200px',
       margin: '0 auto'
