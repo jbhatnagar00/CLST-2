@@ -121,8 +121,16 @@ const AddItemPage = () => {
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
-      <h1 style={{ marginBottom: '2rem' }}>Add New Item</h1>
+    <div style={{ 
+      padding: '4rem 2rem', 
+      maxWidth: '600px', 
+      margin: '0 auto',
+      minHeight: 'calc(100vh - 70px - 100px)',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center'
+    }}>
+      <h1 style={{ marginBottom: '2rem', textAlign: 'center' }}>Add New Item</h1>
       
       <form onSubmit={handleSubmit}>
         {/* Photo Upload */}
@@ -170,17 +178,23 @@ const AddItemPage = () => {
             {itemData.photos.length < 5 && (
               <label style={{
                 display: 'flex',
-                flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
                 height: '120px',
-                border: '2px dashed #ddd',
+                border: '2px solid black',
                 borderRadius: '0.25rem',
                 cursor: 'pointer',
-                backgroundColor: '#f9fafb'
-              }}>
-                <span style={{ fontSize: '2rem' }}>📷</span>
-                <span style={{ fontSize: '0.875rem', color: '#666' }}>Add Photo</span>
+                backgroundColor: 'white',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+              >
+                <span style={{ 
+                  fontSize: '2rem', 
+                  fontWeight: '300',
+                  color: 'black'
+                }}>+</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -271,21 +285,6 @@ const AddItemPage = () => {
           marginTop: '2rem' 
         }}>
           <button
-            type="submit"
-            style={{
-              padding: '0.75rem 1.5rem',
-              fontSize: '1rem',
-              backgroundColor: 'black',
-              color: 'white',
-              border: 'none',
-              borderRadius: '0.25rem',
-              cursor: 'pointer',
-              flex: 1
-            }}
-          >
-            Add Item
-          </button>
-          <button
             type="button"
             onClick={() => navigate('/closet')}
             style={{
@@ -300,6 +299,21 @@ const AddItemPage = () => {
             }}
           >
             Cancel
+          </button>
+          <button
+            type="submit"
+            style={{
+              padding: '0.75rem 1.5rem',
+              fontSize: '1rem',
+              backgroundColor: 'black',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.25rem',
+              cursor: 'pointer',
+              flex: 1
+            }}
+          >
+            Add Item
           </button>
         </div>
       </form>
