@@ -53,10 +53,19 @@ const HomePage = () => {
       <style>{`
         @keyframes smoothLoop {
           0% {
-            transform: translateX(0);
+            transform: translateX(0) translateY(0);
+          }
+          25% {
+            transform: translateX(-12.5%) translateY(-290px);
+          }
+          50% {
+            transform: translateX(-25%) translateY(0);
+          }
+          75% {
+            transform: translateX(-37.5%) translateY(-290px);
           }
           100% {
-            transform: translateX(-50%);
+            transform: translateX(-50%) translateY(0);
           }
         }
         
@@ -68,6 +77,7 @@ const HomePage = () => {
           right: 50%;
           margin-left: -50vw;
           margin-right: -50vw;
+          padding: 290px 0;
         }
         
         .loop-text {
