@@ -127,10 +127,9 @@ const HomePage = () => {
               description="Organize your wardrobe digitally. Upload photos and categorize items."
               icon={
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="4" y="4" width="16" height="16" rx="1" />
-                  <line x1="4" y1="10" x2="20" y2="10" />
-                  <line x1="10" y1="4" x2="10" y2="20" />
-                  <line x1="14" y1="4" x2="14" y2="20" />
+                  <path d="M12 2L20 7V21H4V7L12 2Z" />
+                  <path d="M12 2V7" />
+                  <circle cx="12" cy="12" r="1.5" fill="currentColor" />
                 </svg>
               }
               link="/closet"
@@ -155,10 +154,9 @@ const HomePage = () => {
               description="Buy and sell pre-loved fashion items with the community."
               icon={
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="2" y="7" width="20" height="14" rx="1" />
-                  <path d="M12 2L2 7v14h20V7L12 2z" />
-                  <line x1="2" y1="7" x2="22" y2="7" />
-                  <line x1="12" y1="2" x2="12" y2="7" />
+                  <rect x="5" y="7" width="14" height="14" rx="1" />
+                  <path d="M9 7V5C9 3.895 9.895 3 11 3H13C14.105 3 15 3.895 15 5V7" />
+                  <line x1="12" y1="12" x2="12" y2="16" />
                 </svg>
               }
               link="/marketplace"
@@ -169,10 +167,7 @@ const HomePage = () => {
               description="Stay updated with the latest trends and style inspiration."
               icon={
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="18" height="18" rx="1" />
-                  <polyline points="7 13 10 10 14 14 17 11" />
-                  <line x1="17" y1="11" x2="17" y2="17" />
-                  <line x1="17" y1="17" x2="11" y2="17" />
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                 </svg>
               }
               link="/trends"
@@ -183,9 +178,7 @@ const HomePage = () => {
               description="Join weekly challenges and get inspired by others."
               icon={
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="5" y="12" width="4" height="9" rx="1" />
-                  <rect x="10" y="7" width="4" height="14" rx="1" />
-                  <rect x="15" y="3" width="4" height="18" rx="1" />
+                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
                 </svg>
               }
               link="/challenges"
