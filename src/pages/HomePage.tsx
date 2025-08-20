@@ -110,10 +110,10 @@ const HomePage = () => {
         <div style={{ padding: '0 2rem', marginTop: '171px' }}>
           <p style={{ 
             fontSize: 'clamp(1.25rem, 3vw, 1.75rem)', 
-            color: '#333', 
+            color: 'black', 
             marginBottom: '3rem' 
           }}>
-            Your Closet's Digital Twin
+            Your Closet's Digital Twin.
           </p>
           
           <div style={{
