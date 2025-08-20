@@ -157,9 +157,9 @@ const Navigation = () => {
       top: 0,
       backgroundColor: 'white',
       zIndex: 1000,
-      width: '100vw',
-      marginLeft: 'calc(-50vw + 50%)',
-      marginRight: 'calc(-50vw + 50%)'
+      width: '100%',
+      marginLeft: 0,
+      marginRight: 0
     }}>
       <div style={{
         maxWidth: '1200px',
@@ -321,9 +321,9 @@ const Footer = () => (
   <footer style={{
     marginTop: 'auto',
     backgroundColor: 'white',
-    width: '100vw',
-    marginLeft: 'calc(-50vw + 50%)',
-    marginRight: 'calc(-50vw + 50%)'
+    width: '100%',
+    marginLeft: 0,
+    marginRight: 0
   }}>
     <div style={{
       height: '2px',
@@ -398,15 +398,16 @@ function App() {
             minHeight: '100vh', 
             fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             display: 'flex',
-            flexDirection: 'column'
+            flexDirection: 'column',
+            overflowX: 'hidden'
           }}>
             <Navigation />
             <main style={{ 
               flex: 1,
               backgroundColor: '#f5f5f5',
-              width: '100vw',
-              marginLeft: 'calc(-50vw + 50%)',
-              marginRight: 'calc(-50vw + 50%)'
+              width: '100%',
+              marginLeft: 0,
+              marginRight: 0
             }}>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
