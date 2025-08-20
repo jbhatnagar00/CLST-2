@@ -128,14 +128,15 @@ const AddItemPage = () => {
       minHeight: 'calc(100vh - 70px - 100px)',
       display: 'flex',
       flexDirection: 'column',
-      justifyContent: 'center'
+      justifyContent: 'center',
+      transform: 'translateY(-8px)'
     }}>
       <h1 style={{ marginBottom: '2rem', textAlign: 'center' }}>Add New Item</h1>
       
       <form onSubmit={handleSubmit}>
         {/* Photo Upload */}
         <label style={labelStyle}>
-          Photos (minimum 2 required)
+          Photos
           <div style={{ 
             marginTop: '0.5rem',
             display: 'grid',
