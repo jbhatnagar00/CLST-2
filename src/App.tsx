@@ -209,6 +209,7 @@ const Footer = () => (
     marginTop: 'auto'
   }}>
     <div style={{
+      marginTop: '4rem',
       height: '2px',
       backgroundColor: 'black'
     }} />
