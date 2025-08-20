@@ -397,7 +397,10 @@ function App() {
             <Navigation />
             <main style={{ 
               flex: 1,
-              backgroundColor: '#f5f5f5'
+              backgroundColor: '#f5f5f5',
+              width: '100vw',
+              marginLeft: 'calc(-50vw + 50%)',
+              marginRight: 'calc(-50vw + 50%)'
             }}>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
