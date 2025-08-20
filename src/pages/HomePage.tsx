@@ -169,7 +169,7 @@ const HomePage = () => {
         color: '#666',
         fontSize: '0.875rem'
       }}>
-        © 2024 CLST. All rights reserved.
+        © 2025 CLST. All rights reserved.
       </footer>
     </>
   )
