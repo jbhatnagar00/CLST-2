@@ -106,7 +106,7 @@ const HomePage = () => {
             ))}
           </div>
         </div>
-        <div style={{ padding: '0 2rem' }}>
+        <div style={{ padding: '0 2rem', marginTop: '320px' }}>
           <p style={{ 
             fontSize: 'clamp(1.25rem, 3vw, 1.75rem)', 
             color: '#333', 
