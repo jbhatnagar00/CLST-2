@@ -155,7 +155,7 @@ const Navigation = () => {
       position: 'sticky',
       top: 0,
       backgroundColor: 'white',
-      zIndex: 1000,
+      zIndex: 9999,
       width: '100%',
       boxSizing: 'border-box'
     }}>
