@@ -209,7 +209,7 @@ const HomePage = () => {
                   <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                 </svg>
               }
-              color="#3b82f6"
+              color="#60a5fa"
             />
             <FeatureCard 
               title="Style Challenges" 
