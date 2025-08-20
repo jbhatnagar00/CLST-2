@@ -52,38 +52,34 @@ const HomePage = () => {
     <>
       <style>{`
         @keyframes smoothLoop {
-          0% {
-            transform: translateX(0) translateY(0);
+          from {
+            transform: rotate(0deg);
           }
-          25% {
-            transform: translateX(-12.5%) translateY(-290px);
-          }
-          50% {
-            transform: translateX(-25%) translateY(0);
-          }
-          75% {
-            transform: translateX(-37.5%) translateY(-290px);
-          }
-          100% {
-            transform: translateX(-50%) translateY(0);
+          to {
+            transform: rotate(360deg);
           }
         }
         
         .loop-container {
-          overflow: hidden;
-          width: 100vw;
+          width: 580px;
+          height: 580px;
           position: relative;
-          left: 50%;
-          right: 50%;
-          margin-left: -50vw;
-          margin-right: -50vw;
-          padding: 290px 0;
+          margin: 0 auto;
         }
         
         .loop-text {
-          display: inline-block;
+          position: absolute;
+          width: 100%;
+          height: 100%;
           animation: smoothLoop 40s linear infinite;
-          white-space: nowrap;
+          transform-origin: center;
+        }
+        
+        .loop-text span {
+          position: absolute;
+          left: 50%;
+          top: 0;
+          transform-origin: 0 290px;
         }
       `}</style>
 
@@ -95,16 +91,20 @@ const HomePage = () => {
         overflow: 'hidden'
       }}>
         <div className="loop-container">
-          <h1 
-            className="loop-text"
-            style={{ 
-              fontSize: 'clamp(2.5rem, 5vw, 4rem)', 
-              marginBottom: '1rem',
-              lineHeight: 1.2 
-            }}
-          >
-            Welcome To CLST&#8201;Welcome To CLST&#8201;Welcome To CLST&#8201;Welcome To CLST&#8201;Welcome To CLST&#8201;Welcome To CLST&#8201;Welcome To CLST&#8201;Welcome To CLST&#8201;Welcome To CLST&#8201;Welcome To CLST&#8201;Welcome To CLST&#8201;Welcome To CLST&#8201;Welcome To CLST&#8201;Welcome To CLST&#8201;Welcome To CLST&#8201;Welcome To CLST&#8201;
-          </h1>
+          <div className="loop-text">
+            {[...Array(16)].map((_, i) => (
+              <span
+                key={i}
+                style={{
+                  transform: `rotate(${i * 22.5}deg)`,
+                  fontSize: 'clamp(2.5rem, 5vw, 4rem)',
+                  lineHeight: 1.2
+                }}
+              >
+                Welcome To CLST&#8201;
+              </span>
+            ))}
+          </div>
         </div>
         <div style={{ padding: '0 2rem' }}>
           <p style={{ 
