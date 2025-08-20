@@ -1,8 +1,14 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../App'
+
+// TODO: Uncomment when Amplify is configured
+// import { signIn } from 'aws-amplify/auth'
 
 const LoginPage = () => {
   const navigate = useNavigate()
+  const location = useLocation()
+  const { setIsAuthenticated } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -26,11 +32,25 @@ const LoginPage = () => {
 
     // TODO: Replace with actual authentication logic
     try {
-      // Simulate API call
+      // TODO: Uncomment when Amplify is configured
+      // const { isSignedIn, nextStep } = await signIn({ username: email, password })
+      // if (isSignedIn) {
+      //   setIsAuthenticated(true)
+      //   navigate('/closet')
+      // }
+      
+      // Temporary solution - simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000))
       
-      // For demo purposes, just navigate to closet
-      navigate('/closet')
+      // For demo: save auth token to localStorage
+      localStorage.setItem('authToken', 'demo-token')
+      
+      // Set authenticated state
+      setIsAuthenticated(true)
+      
+      // Navigate to originally requested page or closet
+      const from = location.state?.from?.pathname || '/closet'
+      navigate(from, { replace: true })
     } catch (err) {
       setError('Invalid email or password')
     } finally {
