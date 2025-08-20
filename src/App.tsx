@@ -7,6 +7,9 @@ const ClosetPage = lazy(() => import('./pages/ClosetPage'))
 const OutfitsPage = lazy(() => import('./pages/OutfitsPage'))
 const MarketplacePage = lazy(() => import('./pages/MarketplacePage'))
 const TrendsPage = lazy(() => import('./pages/TrendsPage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const RegisterPage = lazy(() => import('./pages/RegisterPage'))
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
 
 // Loading component for Suspense fallback
 const PageLoader = () => (
@@ -229,11 +232,16 @@ const Footer = () => (
     }} />
     <div style={{
       padding: '2rem',
-      textAlign: 'center',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
       color: '#666',
-      fontSize: '0.875rem'
+      fontSize: '0.875rem',
+      maxWidth: '1200px',
+      margin: '0 auto'
     }}>
-      © 2025 CLST. All rights reserved.
+      <div>© 2025 CLST. All rights reserved.</div>
+      <div>J.B Goods™</div>
     </div>
   </footer>
 )
@@ -258,6 +266,9 @@ function App() {
                 <Route path="/outfits" element={<OutfitsPage />} />
                 <Route path="/marketplace" element={<MarketplacePage />} />
                 <Route path="/trends" element={<TrendsPage />} />
+                <Route path="/auth/login" element={<LoginPage />} />
+                <Route path="/auth/register" element={<RegisterPage />} />
+                <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
               </Routes>
             </Suspense>
           </main>
