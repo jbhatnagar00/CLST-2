@@ -33,6 +33,7 @@ const useAuth = () => useContext(AuthContext)
 // Lazy load page components for better performance
 const HomePage = lazy(() => import('./pages/HomePage'))
 const ClosetPage = lazy(() => import('./pages/ClosetPage'))
+const AddItemPage = lazy(() => import('./pages/AddItemPage'))
 const OutfitsPage = lazy(() => import('./pages/OutfitsPage'))
 const MarketplacePage = lazy(() => import('./pages/MarketplacePage'))
 const TrendsPage = lazy(() => import('./pages/TrendsPage'))
@@ -447,6 +448,11 @@ function App() {
                   <Route path="/closet" element={
                     <ProtectedRoute>
                       <ClosetPage />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/closet/add-item" element={
+                    <ProtectedRoute>
+                      <AddItemPage />
                     </ProtectedRoute>
                   } />
                   <Route path="/outfits" element={
