@@ -53,44 +53,50 @@ const HomePage = () => {
       <style>{`
         @keyframes smoothLoop {
           0% {
-            transform: translateX(100%);
+            transform: translateX(0);
           }
           100% {
-            transform: translateX(-100%);
+            transform: translateX(-50%);
           }
         }
         
         .loop-container {
           overflow: hidden;
-          width: 100%;
+          width: 100vw;
+          position: relative;
+          left: 50%;
+          right: 50%;
+          margin-left: -50vw;
+          margin-right: -50vw;
         }
         
         .loop-text {
           display: inline-block;
-          animation: smoothLoop 5s linear infinite;
+          animation: smoothLoop 10s linear infinite;
           white-space: nowrap;
         }
       `}</style>
 
       {/* Hero Section */}
       <section style={{ 
-        padding: '4rem 2rem', 
+        padding: '4rem 0', 
         textAlign: 'center',
-        backgroundColor: '#f5f5f5'
+        backgroundColor: '#f5f5f5',
+        overflow: 'hidden'
       }}>
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-          <div className="loop-container">
-            <h1 
-              className="loop-text"
-              style={{ 
-                fontSize: 'clamp(2.5rem, 5vw, 4rem)', 
-                marginBottom: '1rem',
-                lineHeight: 1.2 
-              }}
-            >
-              Welcome To CLST
-            </h1>
-          </div>
+        <div className="loop-container">
+          <h1 
+            className="loop-text"
+            style={{ 
+              fontSize: 'clamp(2.5rem, 5vw, 4rem)', 
+              marginBottom: '1rem',
+              lineHeight: 1.2 
+            }}
+          >
+            Welcome To CLST &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Welcome To CLST &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Welcome To CLST &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Welcome To CLST &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          </h1>
+        </div>
+        <div style={{ padding: '0 2rem' }}>
           <p style={{ 
             fontSize: 'clamp(1.25rem, 3vw, 1.75rem)', 
             color: '#333', 
