@@ -156,7 +156,10 @@ const Navigation = () => {
       position: 'sticky',
       top: 0,
       backgroundColor: 'white',
-      zIndex: 1000
+      zIndex: 1000,
+      width: '100vw',
+      marginLeft: 'calc(-50vw + 50%)',
+      marginRight: 'calc(-50vw + 50%)'
     }}>
       <div style={{
         maxWidth: '1200px',
@@ -317,7 +320,10 @@ const Navigation = () => {
 const Footer = () => (
   <footer style={{
     marginTop: 'auto',
-    backgroundColor: 'white'
+    backgroundColor: 'white',
+    width: '100vw',
+    marginLeft: 'calc(-50vw + 50%)',
+    marginRight: 'calc(-50vw + 50%)'
   }}>
     <div style={{
       height: '2px',
