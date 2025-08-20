@@ -125,9 +125,23 @@ const Navigation = () => {
           fontSize: '1.5rem', 
           fontWeight: 'bold', 
           textDecoration: 'none', 
-          color: 'black' 
+          color: 'black',
+          display: 'flex',
+          alignItems: 'center'
         }}>
-          CLST
+          <svg 
+            width="32" 
+            height="32" 
+            viewBox="0 0 24 24" 
+            fill="currentColor"
+            style={{ display: 'block' }}
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="2"/>
+            <line x1="9" y1="3" x2="9" y2="21" stroke="currentColor" strokeWidth="2"/>
+            <line x1="15" y1="3" x2="15" y2="21" stroke="currentColor" strokeWidth="2"/>
+            <line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" strokeWidth="2"/>
+            <line x1="3" y1="15" x2="21" y2="15" stroke="currentColor" strokeWidth="2"/>
+          </svg>
         </Link>
         
         {/* Desktop Navigation */}
