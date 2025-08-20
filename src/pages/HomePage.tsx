@@ -65,7 +65,7 @@ const HomePage = () => {
           height: 580px;
           position: relative;
           margin: 0 auto;
-          margin-top: 2px;
+          margin-top: 4px;
         }
         
         .loop-text {
