@@ -203,54 +203,17 @@ const Navigation = () => {
   )
 }
 
-// Footer component
+// Footer component - Simplified to just copyright
 const Footer = () => (
   <footer style={{
     marginTop: 'auto',
     padding: '2rem',
-    borderTop: '2px solid black',
-    backgroundColor: '#fafafa'
+    textAlign: 'center',
+    borderTop: '1px solid #e5e5e5',
+    color: '#666',
+    fontSize: '0.875rem'
   }}>
-    <div style={{
-      maxWidth: '1200px',
-      margin: '0 auto',
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-      gap: '2rem'
-    }}>
-      <div>
-        <h3 style={{ marginBottom: '1rem' }}>CLST</h3>
-        <p style={{ color: '#666', fontSize: '0.875rem' }}>
-          Your digital fashion closet for the modern world.
-        </p>
-      </div>
-      <div>
-        <h4 style={{ marginBottom: '1rem' }}>Features</h4>
-        <ul style={{ listStyle: 'none', padding: 0, fontSize: '0.875rem' }}>
-          <li><Link to="/closet" style={{ color: '#666', textDecoration: 'none' }}>Digital Closet</Link></li>
-          <li><Link to="/outfits" style={{ color: '#666', textDecoration: 'none' }}>Outfit Creator</Link></li>
-          <li><Link to="/marketplace" style={{ color: '#666', textDecoration: 'none' }}>Marketplace</Link></li>
-          <li><Link to="/trends" style={{ color: '#666', textDecoration: 'none' }}>Fashion Trends</Link></li>
-        </ul>
-      </div>
-      <div>
-        <h4 style={{ marginBottom: '1rem' }}>Connect</h4>
-        <p style={{ color: '#666', fontSize: '0.875rem' }}>
-          Coming soon: iOS & Android apps
-        </p>
-      </div>
-    </div>
-    <div style={{
-      maxWidth: '1200px',
-      margin: '2rem auto 0',
-      paddingTop: '2rem',
-      borderTop: '1px solid #e5e5e5',
-      textAlign: 'center',
-      color: '#666',
-      fontSize: '0.875rem'
-    }}>
-      © 2025 CLST. All rights reserved.
-    </div>
+    © 2025 CLST. All rights reserved.
   </footer>
 )
 
