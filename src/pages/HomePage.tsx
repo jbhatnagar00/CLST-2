@@ -72,7 +72,7 @@ const HomePage = () => {
         
         .loop-text {
           display: inline-block;
-          animation: smoothLoop 10s linear infinite;
+          animation: smoothLoop 20s linear infinite;
           white-space: nowrap;
         }
       `}</style>
@@ -93,7 +93,7 @@ const HomePage = () => {
               lineHeight: 1.2 
             }}
           >
-            Welcome To CLST &nbsp; Welcome To CLST &nbsp; Welcome To CLST &nbsp; Welcome To CLST &nbsp; Welcome To CLST &nbsp; Welcome To CLST &nbsp; Welcome To CLST &nbsp; Welcome To CLST &nbsp;
+            Welcome To CLST&#8202;Welcome To CLST&#8202;Welcome To CLST&#8202;Welcome To CLST&#8202;Welcome To CLST&#8202;Welcome To CLST&#8202;Welcome To CLST&#8202;Welcome To CLST&#8202;
           </h1>
         </div>
         <div style={{ padding: '0 2rem' }}>
