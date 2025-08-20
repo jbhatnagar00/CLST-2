@@ -54,7 +54,7 @@ const HomePage = () => {
       <section style={{ 
         padding: '4rem 2rem', 
         textAlign: 'center',
-        background: 'linear-gradient(to bottom, #fafafa, white)'
+        backgroundColor: '#f5f5f5'
       }}>
         <div style={{ maxWidth: '800px', margin: '0 auto' }}>
           <h1 style={{ 
@@ -98,7 +98,11 @@ const HomePage = () => {
       </section>
 
       {/* Features Section */}
-      <section style={{ padding: '4rem 2rem' }}>
+      <section style={{ 
+        padding: '4rem 2rem',
+        backgroundColor: '#f5f5f5',
+        paddingBottom: '6rem'
+      }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <h2 style={{ 
             fontSize: '2.5rem', 
