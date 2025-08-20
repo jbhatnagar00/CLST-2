@@ -160,17 +160,6 @@ const HomePage = () => {
           </div>
         </div>
       </section>
-
-      {/* Simple Copyright Footer */}
-      <footer style={{ 
-        padding: '2rem', 
-        textAlign: 'center',
-        borderTop: '1px solid #e5e5e5',
-        color: '#666',
-        fontSize: '0.875rem'
-      }}>
-        © 2025 CLST. All rights reserved.
-      </footer>
     </>
   )
 }
