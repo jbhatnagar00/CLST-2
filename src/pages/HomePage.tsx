@@ -93,7 +93,7 @@ const HomePage = () => {
               lineHeight: 1.2 
             }}
           >
-            Welcome To CLST &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Welcome To CLST &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Welcome To CLST &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Welcome To CLST &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            Welcome To CLST &nbsp; Welcome To CLST &nbsp; Welcome To CLST &nbsp; Welcome To CLST &nbsp; Welcome To CLST &nbsp; Welcome To CLST &nbsp; Welcome To CLST &nbsp; Welcome To CLST &nbsp;
           </h1>
         </div>
         <div style={{ padding: '0 2rem' }}>
