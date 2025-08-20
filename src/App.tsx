@@ -334,7 +334,7 @@ const Footer = () => (
       justifyContent: 'space-between',
       alignItems: 'center',
       color: 'black',
-      fontSize: '0.875rem',
+      fontSize: '1rem',
       maxWidth: '1200px',
       margin: '0 auto'
     }}>
