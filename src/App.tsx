@@ -316,10 +316,10 @@ const Navigation = () => {
 // Footer component - Simplified to just copyright
 const Footer = () => (
   <footer style={{
-    marginTop: 'auto'
+    marginTop: 'auto',
+    backgroundColor: 'white'
   }}>
     <div style={{
-      marginTop: '4rem',
       height: '2px',
       backgroundColor: 'black'
     }} />
@@ -392,11 +392,13 @@ function App() {
             minHeight: '100vh', 
             fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             display: 'flex',
-            flexDirection: 'column',
-            backgroundColor: '#f5f5f5'
+            flexDirection: 'column'
           }}>
             <Navigation />
-            <main style={{ flex: 1 }}>
+            <main style={{ 
+              flex: 1,
+              backgroundColor: '#f5f5f5'
+            }}>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   {/* Public Routes */}
