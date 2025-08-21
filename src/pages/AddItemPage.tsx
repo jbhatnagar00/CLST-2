@@ -129,7 +129,7 @@ const AddItemPage = () => {
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center',
-      transform: 'translateY(-16px)'
+      transform: 'translateY(-20px)'
     }}>
       <h1 style={{ marginBottom: '2rem', textAlign: 'center' }}>Add New Item</h1>
       
@@ -182,19 +182,19 @@ const AddItemPage = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 height: '120px',
-                border: '2px solid black',
+                border: '2px solid #ddd',
                 borderRadius: '0.25rem',
                 cursor: 'pointer',
-                backgroundColor: 'white',
-                transition: 'background-color 0.2s'
+                backgroundColor: '#f9fafb',
+                transition: 'opacity 0.2s'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
               >
                 <span style={{ 
-                  fontSize: '2rem', 
-                  fontWeight: '300',
-                  color: 'black'
+                  fontSize: '3rem', 
+                  fontWeight: '200',
+                  color: '#666'
                 }}>+</span>
                 <input
                   type="file"
