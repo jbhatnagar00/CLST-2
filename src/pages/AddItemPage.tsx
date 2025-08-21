@@ -182,19 +182,19 @@ const AddItemPage = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 height: '120px',
-                border: '2px solid #ddd',
+                border: '2px solid black',
                 borderRadius: '0.25rem',
                 cursor: 'pointer',
-                backgroundColor: '#f9fafb',
-                transition: 'opacity 0.2s'
+                backgroundColor: 'white',
+                transition: 'background-color 0.2s'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
-              onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
               >
                 <span style={{ 
-                  fontSize: '3rem', 
-                  fontWeight: '200',
-                  color: '#666'
+                  fontSize: '2rem', 
+                  fontWeight: '300',
+                  color: 'black'
                 }}>+</span>
                 <input
                   type="file"
@@ -207,6 +207,24 @@ const AddItemPage = () => {
             )}
           </div>
           {errors.photos && <div style={errorStyle}>{errors.photos}</div>}
+        </label>
+
+        {/* Category */}
+        <label style={labelStyle}>
+          Category
+          <select
+            value={itemData.category}
+            onChange={(e) => handleInputChange('category', e.target.value)}
+            style={inputStyle}
+          >
+            <option value="">Select a category</option>
+            <option value="tops">Tops</option>
+            <option value="bottoms">Bottoms</option>
+            <option value="outerwear">Outerwear</option>
+            <option value="shoes">Shoes</option>
+            <option value="accessories">Accessories</option>
+          </select>
+          {errors.category && <div style={errorStyle}>{errors.category}</div>}
         </label>
 
         {/* Brand */}
@@ -233,24 +251,6 @@ const AddItemPage = () => {
             placeholder="e.g., Classic White T-Shirt"
           />
           {errors.itemName && <div style={errorStyle}>{errors.itemName}</div>}
-        </label>
-
-        {/* Category */}
-        <label style={labelStyle}>
-          Category
-          <select
-            value={itemData.category}
-            onChange={(e) => handleInputChange('category', e.target.value)}
-            style={inputStyle}
-          >
-            <option value="">Select a category</option>
-            <option value="tops">Tops</option>
-            <option value="bottoms">Bottoms</option>
-            <option value="outerwear">Outerwear</option>
-            <option value="shoes">Shoes</option>
-            <option value="accessories">Accessories</option>
-          </select>
-          {errors.category && <div style={errorStyle}>{errors.category}</div>}
         </label>
 
         {/* Size */}
