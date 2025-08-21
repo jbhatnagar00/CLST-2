@@ -1,13 +1,6 @@
 import React, { Suspense, lazy, createContext, useContext, useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
-
-// TODO: Uncomment these imports when Amplify is configured
-// import { Amplify } from 'aws-amplify'
-// import { getCurrentUser, signOut } from 'aws-amplify/auth'
-// import awsconfig from './aws-exports'
-
-// TODO: Configure Amplify (uncomment when aws-exports.js is available)
-// Amplify.configure(awsconfig)
+import { getCurrentUser, signOut } from 'aws-amplify/auth'
 
 // Lazy load components
 const ProtectedRoute = lazy(() => import('./ProtectedRoute'))
@@ -376,13 +369,9 @@ function App() {
   // Check authentication state on app load
   const checkAuthState = async () => {
     try {
-      // TODO: Replace with Amplify Auth when configured
-      // const user = await getCurrentUser()
-      // setIsAuthenticated(true)
-      
-      // For now, check localStorage (temporary solution)
-      const authToken = localStorage.getItem('authToken')
-      setIsAuthenticated(!!authToken)
+      // Use Amplify Auth to check current user
+      const user = await getCurrentUser()
+      setIsAuthenticated(true)
     } catch (error) {
       setIsAuthenticated(false)
     } finally {
@@ -393,11 +382,8 @@ function App() {
   // Logout function
   const logout = async () => {
     try {
-      // TODO: Replace with Amplify Auth when configured
-      // await signOut()
-      
-      // For now, clear localStorage
-      localStorage.removeItem('authToken')
+      // Use Amplify Auth to sign out
+      await signOut()
       setIsAuthenticated(false)
     } catch (error) {
       console.error('Error signing out:', error)
