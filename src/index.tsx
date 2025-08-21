@@ -1,12 +1,12 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import './index.css' // This imports the CSS file you showed
+import './index.css'
 import App from './App'
+import { Amplify } from 'aws-amplify'
+import outputs from '../amplify_outputs.json'
 
-// TODO: Uncomment when Amplify is configured
-// import { Amplify } from 'aws-amplify'
-// import awsconfig from './aws-exports'
-// Amplify.configure(awsconfig)
+// Configure Amplify with Gen 2 outputs
+Amplify.configure(outputs)
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
