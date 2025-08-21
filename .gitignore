@@ -1,0 +1,88 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+*.lcov
+.nyc_output
+
+# Production build
+dist/
+dist-ssr/
+build/
+*.local
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE - VSCode
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# TypeScript
+*.tsbuildinfo
+
+# Amplify
+amplify/.config/local-*
+amplify/logs
+amplify/mock-data
+amplify/mock-api-resources
+amplify/backend/amplify-meta.json
+amplify/backend/.temp
+amplify/backend/awscloudformation
+amplify/backend/function/*/src/node_modules/
+amplify/team-provider-info.json
+amplify/#current-cloud-backend
+amplify/.config/project-config.json
+.amplify/
+aws-exports.js
+amplifyconfiguration.json
+
+# IMPORTANT: Do NOT ignore amplify_outputs.json - it's needed for the app to work
+# amplify_outputs.json should be committed
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Yarn
+yarn-error.log
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Misc
+*.pem
+.vercel
