@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { storageService } from '../services/storageService'
+import { closetService } from '../services/closetService'
 
 interface ItemData {
   photos: File[]
@@ -22,6 +24,7 @@ const AddItemPage = () => {
   })
   const [photoUrls, setPhotoUrls] = useState<string[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [isUploading, setIsUploading] = useState(false)
 
   React.useEffect(() => {
     document.title = 'Add Item - CLST'
@@ -87,15 +90,44 @@ const AddItemPage = () => {
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (validateForm()) {
-      // TODO: Submit to API
-      console.log('Submitting item:', itemData)
-      alert('Item added successfully!')
-      // Navigate back to closet page
-      navigate('/closet')
+      const confirmed = window.confirm('Are you sure you want to add this item to your closet?')
+      
+      if (confirmed) {
+        setIsUploading(true)
+        
+        try {
+          // Generate a temporary item ID
+          const tempItemId = Date.now().toString()
+          
+          // Upload photos using the secure storage service
+          const photoKeys: string[] = []
+          for (const photo of itemData.photos) {
+            const key = await storageService.uploadClosetPhoto(photo, tempItemId)
+            photoKeys.push(key)
+          }
+          
+          // Create item using the closet service
+          await closetService.addItem({
+            photos: itemData.photos,
+            brand: itemData.brand,
+            itemName: itemData.itemName,
+            category: itemData.category,
+            size: itemData.size,
+            color: itemData.color
+          })
+          
+          navigate('/closet')
+        } catch (error) {
+          console.error('Error adding item:', error)
+          alert('Error adding item. Please try again.')
+        } finally {
+          setIsUploading(false)
+        }
+      }
     }
   }
 
@@ -202,6 +234,7 @@ const AddItemPage = () => {
                   multiple
                   onChange={handlePhotoChange}
                   style={{ display: 'none' }}
+                  disabled={isUploading}
                 />
               </label>
             )}
@@ -216,6 +249,7 @@ const AddItemPage = () => {
             value={itemData.category}
             onChange={(e) => handleInputChange('category', e.target.value)}
             style={inputStyle}
+            disabled={isUploading}
           >
             <option value="">Select a category</option>
             <option value="tops">Tops</option>
@@ -236,6 +270,7 @@ const AddItemPage = () => {
             onChange={(e) => handleInputChange('brand', e.target.value)}
             style={inputStyle}
             placeholder="e.g., COS, Madewell, Ralph Lauren"
+            disabled={isUploading}
           />
           {errors.brand && <div style={errorStyle}>{errors.brand}</div>}
         </label>
@@ -249,6 +284,7 @@ const AddItemPage = () => {
             onChange={(e) => handleInputChange('itemName', e.target.value)}
             style={inputStyle}
             placeholder="e.g., Classic White T-Shirt"
+            disabled={isUploading}
           />
           {errors.itemName && <div style={errorStyle}>{errors.itemName}</div>}
         </label>
@@ -262,6 +298,7 @@ const AddItemPage = () => {
             onChange={(e) => handleInputChange('size', e.target.value)}
             style={inputStyle}
             placeholder="e.g., S, M, 9, 30"
+            disabled={isUploading}
           />
           {errors.size && <div style={errorStyle}>{errors.size}</div>}
         </label>
@@ -275,6 +312,7 @@ const AddItemPage = () => {
             onChange={(e) => handleInputChange('color', e.target.value)}
             style={inputStyle}
             placeholder="e.g., Black, Navy Blue, White"
+            disabled={isUploading}
           />
           {errors.color && <div style={errorStyle}>{errors.color}</div>}
         </label>
@@ -288,6 +326,7 @@ const AddItemPage = () => {
           <button
             type="button"
             onClick={() => navigate('/closet')}
+            disabled={isUploading}
             style={{
               padding: '0.75rem 1.5rem',
               fontSize: '1rem',
@@ -295,14 +334,16 @@ const AddItemPage = () => {
               color: 'black',
               border: '2px solid black',
               borderRadius: '0.25rem',
-              cursor: 'pointer',
-              flex: 1
+              cursor: isUploading ? 'not-allowed' : 'pointer',
+              flex: 1,
+              opacity: isUploading ? 0.5 : 1
             }}
           >
             Cancel
           </button>
           <button
             type="submit"
+            disabled={isUploading}
             style={{
               padding: '0.75rem 1.5rem',
               fontSize: '1rem',
@@ -310,11 +351,12 @@ const AddItemPage = () => {
               color: 'white',
               border: 'none',
               borderRadius: '0.25rem',
-              cursor: 'pointer',
-              flex: 1
+              cursor: isUploading ? 'not-allowed' : 'pointer',
+              flex: 1,
+              opacity: isUploading ? 0.8 : 1
             }}
           >
-            Add Item
+            {isUploading ? 'Uploading...' : 'Add Item'}
           </button>
         </div>
       </form>
