@@ -1,6 +1,10 @@
 // src/services/closetService.ts
-import { closetApi } from './api/closet.api'
-import { apiClient } from './api/AmplifyApiClient'
+import { generateClient } from 'aws-amplify/data';
+import { storageService } from './storageService';
+import { getCurrentUser } from 'aws-amplify/auth';
+import type { Schema } from '../../amplify/data/resource';
+
+const client = generateClient<Schema>();
 
 interface AddItemData {
   photos: File[]
@@ -12,62 +16,96 @@ interface AddItemData {
 }
 
 export const closetService = {
-  // Add new item with photo upload
   async addItem(data: AddItemData) {
     try {
-      // Get current user using existing apiClient
-      const user = await apiClient.getCurrentUser()
+      const user = await getCurrentUser();
+      
+      // Generate a temporary item ID for photo organization
+      const tempItemId = Date.now().toString();
       
       // Upload photos first
-      const photoUrls = await closetApi.uploadPhotos(data.photos, user.id)
+      const photoKeys: string[] = [];
+      for (const photo of data.photos) {
+        const key = await storageService.uploadClosetPhoto(photo, tempItemId);
+        photoKeys.push(key);
+      }
       
-      // Create item with photo URLs
-      const newItem = await closetApi.createItem({
-        photoUrls,
+      // Create item in database
+      const { data: newItem, errors } = await client.models.ClosetItem.create({
         brand: data.brand,
         itemName: data.itemName,
         category: data.category,
         size: data.size,
-        color: data.color
-      })
+        color: data.color,
+        photoKeys: photoKeys,
+        userId: user.userId
+      });
       
-      return newItem
+      if (errors) {
+        console.error('Error creating item:', errors);
+        throw new Error('Failed to create item');
+      }
+      
+      return newItem;
     } catch (error) {
-      console.error('Error adding item:', error)
-      throw error
+      console.error('Error in addItem:', error);
+      throw error;
     }
   },
-
-  // Get all user's items
-  async getUserItems(params?: { page?: number; category?: string }) {
+  
+  async getUserItems() {
     try {
-      const items = await closetApi.getItems(params)
-      return items
+      const { data: items, errors } = await client.models.ClosetItem.list();
+      
+      if (errors) {
+        console.error('Error fetching items:', errors);
+        return [];
+      }
+      
+      // Get photo URLs for each item
+      const itemsWithPhotos = await Promise.all(
+        items.map(async (item) => {
+          const photoUrls = await Promise.all(
+            (item.photoKeys || []).map(key => storageService.getClosetPhotoUrl(key))
+          );
+          return {
+            ...item,
+            photoUrls
+          };
+        })
+      );
+      
+      return itemsWithPhotos;
     } catch (error) {
-      console.error('Error fetching items:', error)
-      throw error
+      console.error('Error in getUserItems:', error);
+      return [];
     }
   },
-
-  // Delete item
+  
   async deleteItem(itemId: string) {
     try {
-      await closetApi.deleteItem(itemId)
-      return true
+      // Get item to find photo keys
+      const { data: item } = await client.models.ClosetItem.get({ id: itemId });
+      
+      if (item) {
+        // Delete photos from storage
+        await Promise.all(
+          (item.photoKeys || []).map(key => storageService.deleteClosetPhoto(key))
+        );
+        
+        // Delete item from database
+        const { errors } = await client.models.ClosetItem.delete({ id: itemId });
+        
+        if (errors) {
+          console.error('Error deleting item:', errors);
+          throw new Error('Failed to delete item');
+        }
+      }
+      
+      return true;
     } catch (error) {
-      console.error('Error deleting item:', error)
-      throw error
-    }
-  },
-
-  // Update item details (without changing photos)
-  async updateItem(itemId: string, updates: Partial<Omit<AddItemData, 'photos'>>) {
-    try {
-      const updatedItem = await closetApi.updateItem(itemId, updates)
-      return updatedItem
-    } catch (error) {
-      console.error('Error updating item:', error)
-      throw error
+      console.error('Error in deleteItem:', error);
+      throw error;
     }
   }
-}
+};
