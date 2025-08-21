@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, createContext, useContext, useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { getCurrentUser, signOut } from 'aws-amplify/auth'
+import { getCurrentUser, signOut, fetchAuthSession } from 'aws-amplify/auth'
+import { Hub } from 'aws-amplify/utils'
 
 // Lazy load components
 const ProtectedRoute = lazy(() => import('./ProtectedRoute'))
@@ -369,10 +370,23 @@ function App() {
   // Check authentication state on app load
   const checkAuthState = async () => {
     try {
-      // Use Amplify Auth to check current user
+      console.log('Checking auth state...')
+      
+      // Try to get current authenticated user
       const user = await getCurrentUser()
-      setIsAuthenticated(true)
+      console.log('User authenticated:', user)
+      
+      // Also verify session is valid
+      const session = await fetchAuthSession()
+      console.log('Session valid:', !!session.tokens)
+      
+      if (session.tokens) {
+        setIsAuthenticated(true)
+      } else {
+        setIsAuthenticated(false)
+      }
     } catch (error) {
+      console.log('No authenticated user:', error)
       setIsAuthenticated(false)
     } finally {
       setIsCheckingAuth(false)
@@ -385,13 +399,40 @@ function App() {
       // Use Amplify Auth to sign out
       await signOut()
       setIsAuthenticated(false)
+      console.log('User signed out successfully')
     } catch (error) {
       console.error('Error signing out:', error)
     }
   }
 
   useEffect(() => {
+    // Check auth state on mount
     checkAuthState()
+
+    // Listen for auth events
+    const hubListener = Hub.listen('auth', (data) => {
+      console.log('Auth event:', data.payload.event)
+      switch (data.payload.event) {
+        case 'signedIn':
+          console.log('User signed in')
+          setIsAuthenticated(true)
+          break
+        case 'signedOut':
+          console.log('User signed out')
+          setIsAuthenticated(false)
+          break
+        case 'tokenRefresh':
+          console.log('Token refreshed')
+          setIsAuthenticated(true)
+          break
+        case 'tokenRefresh_failure':
+          console.log('Token refresh failed')
+          setIsAuthenticated(false)
+          break
+      }
+    })
+
+    return () => hubListener()
   }, [])
 
   // Show loading while checking auth
