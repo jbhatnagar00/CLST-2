@@ -1,6 +1,6 @@
-// Zustand store integrated with AWS Amplify Auth
+// Zustand store integrated with AWS Amplify Auth v6
 import { create } from 'zustand'
-import { Auth } from 'aws-amplify'
+import { signIn, signUp, signOut, getCurrentUser, fetchAuthSession } from 'aws-amplify/auth'
 
 interface AuthState {
   user: any | null
@@ -24,13 +24,15 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   checkAuth: async () => {
     try {
-      const user = await Auth.currentAuthenticatedUser()
+      const { username, userId } = await getCurrentUser()
+      const session = await fetchAuthSession()
+      
       set({
         user: {
-          id: user.attributes.sub,
-          email: user.attributes.email,
-          username: user.username,
-          emailVerified: user.attributes.email_verified
+          id: userId,
+          email: session.tokens?.idToken?.payload?.email as string || '',
+          username: username,
+          emailVerified: true
         },
         isAuthenticated: true
       })
@@ -42,16 +44,31 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null })
     try {
-      const user = await Auth.signIn(email, password)
-      set({
-        user: {
-          id: user.attributes.sub,
-          email: user.attributes.email,
-          username: user.username
-        },
-        isAuthenticated: true,
-        isLoading: false
+      const { isSignedIn, nextStep } = await signIn({
+        username: email,
+        password: password
       })
+      
+      if (isSignedIn) {
+        const { username, userId } = await getCurrentUser()
+        const session = await fetchAuthSession()
+        
+        set({
+          user: {
+            id: userId,
+            email: email,
+            username: username
+          },
+          isAuthenticated: true,
+          isLoading: false
+        })
+      } else {
+        // Handle additional steps if needed (MFA, etc.)
+        set({
+          error: `Additional step required: ${nextStep.signInStep}`,
+          isLoading: false
+        })
+      }
     } catch (error: any) {
       set({
         error: error.message || 'Login failed',
@@ -64,16 +81,27 @@ export const useAuthStore = create<AuthState>((set) => ({
   signup: async (data) => {
     set({ isLoading: true, error: null })
     try {
-      await Auth.signUp({
+      const { isSignUpComplete, userId, nextStep } = await signUp({
         username: data.username,
         password: data.password,
-        attributes: {
-          email: data.email,
-          given_name: data.firstName,
-          family_name: data.lastName
+        options: {
+          userAttributes: {
+            email: data.email,
+            given_name: data.firstName,
+            family_name: data.lastName
+          }
         }
       })
-      set({ isLoading: false })
+      
+      if (isSignUpComplete) {
+        set({ isLoading: false })
+      } else {
+        // Handle confirmation step
+        set({ 
+          isLoading: false,
+          error: `Please confirm your account. Check your email for the verification code.`
+        })
+      }
     } catch (error: any) {
       set({
         error: error.message || 'Signup failed',
@@ -85,7 +113,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     try {
-      await Auth.signOut()
+      await signOut()
       set({
         user: null,
         isAuthenticated: false
