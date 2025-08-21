@@ -1,14 +1,12 @@
 import React, { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../App'
-
-// TODO: Uncomment when Amplify is configured
-// import { signIn } from 'aws-amplify/auth'
+import { signIn } from 'aws-amplify/auth'
 
 const LoginPage = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { setIsAuthenticated } = useAuth()
+  const { setIsAuthenticated, checkAuthState } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -30,29 +28,49 @@ const LoginPage = () => {
       return
     }
 
-    // TODO: Replace with actual authentication logic
     try {
-      // TODO: Uncomment when Amplify is configured
-      // const { isSignedIn, nextStep } = await signIn({ username: email, password })
-      // if (isSignedIn) {
-      //   setIsAuthenticated(true)
-      //   navigate('/closet')
-      // }
+      // Use Amplify Auth to sign in
+      const { isSignedIn, nextStep } = await signIn({ 
+        username: email, 
+        password 
+      })
       
-      // Temporary solution - simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      console.log('Sign in result:', { isSignedIn, nextStep })
       
-      // For demo: save auth token to localStorage
-      localStorage.setItem('authToken', 'demo-token')
+      if (isSignedIn) {
+        // Update auth state
+        setIsAuthenticated(true)
+        
+        // Double-check auth state
+        await checkAuthState()
+        
+        // Navigate to originally requested page or closet
+        const from = location.state?.from?.pathname || '/closet'
+        navigate(from, { replace: true })
+      } else {
+        // Handle additional steps if needed (e.g., MFA, new password required)
+        if (nextStep.signInStep === 'CONFIRM_SIGN_UP') {
+          setError('Please verify your email before signing in')
+        } else if (nextStep.signInStep === 'NEW_PASSWORD_REQUIRED') {
+          setError('You need to set a new password')
+          // You might want to navigate to a new password page
+        } else {
+          setError(`Additional step required: ${nextStep.signInStep}`)
+        }
+      }
+    } catch (err: any) {
+      console.error('Login error:', err)
       
-      // Set authenticated state
-      setIsAuthenticated(true)
-      
-      // Navigate to originally requested page or closet
-      const from = location.state?.from?.pathname || '/closet'
-      navigate(from, { replace: true })
-    } catch (err) {
-      setError('Invalid email or password')
+      // Handle specific error cases
+      if (err.name === 'UserNotFoundException') {
+        setError('No account found with this email')
+      } else if (err.name === 'NotAuthorizedException') {
+        setError('Incorrect email or password')
+      } else if (err.name === 'UserNotConfirmedException') {
+        setError('Please verify your email before signing in')
+      } else {
+        setError(err.message || 'An error occurred during sign in')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -136,6 +154,7 @@ const LoginPage = () => {
               onBlur={(e) => e.target.style.borderColor = '#e5e5e5'}
               placeholder="you@example.com"
               disabled={isLoading}
+              autoComplete="email"
             />
           </div>
 
@@ -153,26 +172,8 @@ const LoginPage = () => {
               onBlur={(e) => e.target.style.borderColor = '#e5e5e5'}
               placeholder="••••••••"
               disabled={isLoading}
+              autoComplete="current-password"
             />
-          </div>
-
-          <div style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            marginBottom: '1.5rem'
-          }}>
-            <Link
-              to="/auth/forgot-password"
-              style={{
-                color: '#666',
-                fontSize: '0.875rem',
-                textDecoration: 'none'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
-              onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
-            >
-              Forgot password?
-            </Link>
           </div>
 
           <button
@@ -195,6 +196,24 @@ const LoginPage = () => {
           >
             {isLoading ? 'Logging in...' : 'Log In'}
           </button>
+
+          <div style={{
+            textAlign: 'center',
+            marginBottom: '1.5rem'
+          }}>
+            <Link
+              to="/auth/forgot-password"
+              style={{
+                color: '#666',
+                fontSize: '0.875rem',
+                textDecoration: 'none'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+              onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+            >
+              Forgot password?
+            </Link>
+          </div>
         </form>
 
         <div style={{
