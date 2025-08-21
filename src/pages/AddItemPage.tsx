@@ -129,7 +129,7 @@ const AddItemPage = () => {
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center',
-      transform: 'translateY(-10px)'
+      transform: 'translateY(-16px)'
     }}>
       <h1 style={{ marginBottom: '2rem', textAlign: 'center' }}>Add New Item</h1>
       
