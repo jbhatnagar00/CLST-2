@@ -1,24 +1,37 @@
-// Simplified API Client for AWS Amplify
-import { API, Auth, Storage } from 'aws-amplify'
+// Simplified API Client for AWS Amplify v6
+import { get, post, put, del } from 'aws-amplify/api'
+import { signIn, signUp, signOut, getCurrentUser, fetchAuthSession } from 'aws-amplify/auth'
+import { uploadData, getUrl } from 'aws-amplify/storage'
 
 class AmplifyApiClient {
   // Authentication methods
   async login(email: string, password: string) {
     try {
-      const user = await Auth.signIn(email, password)
-      return {
-        user: {
-          id: user.attributes.sub,
-          email: user.attributes.email,
-          username: user.username,
-          emailVerified: user.attributes.email_verified
-        },
-        tokens: {
-          accessToken: user.signInUserSession.accessToken.jwtToken,
-          refreshToken: user.signInUserSession.refreshToken.token,
-          expiresIn: 3600
+      const { isSignedIn, nextStep } = await signIn({
+        username: email,
+        password: password
+      })
+      
+      if (isSignedIn) {
+        const user = await getCurrentUser()
+        const session = await fetchAuthSession()
+        
+        return {
+          user: {
+            id: user.userId,
+            email: email,
+            username: user.username,
+            emailVerified: true
+          },
+          tokens: {
+            accessToken: session.tokens?.accessToken?.toString() || '',
+            refreshToken: session.tokens?.refreshToken?.toString() || '',
+            expiresIn: 3600
+          }
         }
       }
+      
+      throw new Error('Sign in not complete')
     } catch (error: any) {
       throw new Error(error.message || 'Login failed')
     }
@@ -26,70 +39,158 @@ class AmplifyApiClient {
 
   async signup(data: any) {
     try {
-      const { user } = await Auth.signUp({
+      const { isSignUpComplete, userId, nextStep } = await signUp({
         username: data.username,
         password: data.password,
-        attributes: {
-          email: data.email,
-          given_name: data.firstName,
-          family_name: data.lastName
+        options: {
+          userAttributes: {
+            email: data.email,
+            given_name: data.firstName,
+            family_name: data.lastName
+          }
         }
       })
-      return { user, needsVerification: true }
+      
+      return { 
+        user: { userId }, 
+        needsVerification: nextStep.signUpStep === 'CONFIRM_SIGN_UP'
+      }
     } catch (error: any) {
       throw new Error(error.message || 'Signup failed')
     }
   }
 
   async logout() {
-    await Auth.signOut()
+    await signOut()
   }
 
   async getCurrentUser() {
-    const user = await Auth.currentAuthenticatedUser()
-    return {
-      id: user.attributes.sub,
-      email: user.attributes.email,
-      username: user.username,
-      emailVerified: user.attributes.email_verified
+    try {
+      const { username, userId } = await getCurrentUser()
+      const session = await fetchAuthSession()
+      
+      return {
+        id: userId,
+        email: session.tokens?.idToken?.payload?.email as string || '',
+        username: username,
+        emailVerified: true
+      }
+    } catch (error) {
+      throw new Error('No authenticated user')
     }
   }
 
-  // API methods using Amplify
+  // API methods using Amplify v6
   async get(path: string, params?: any) {
-    const response = await API.get('ClstAPI', path, { queryStringParameters: params })
-    return response
+    try {
+      const restOperation = get({
+        apiName: 'ClstAPI',
+        path: path,
+        options: {
+          queryParams: params
+        }
+      })
+      
+      const { body } = await restOperation.response
+      const response = await body.json()
+      return response
+    } catch (error) {
+      console.error('GET request failed:', error)
+      throw error
+    }
   }
 
   async post(path: string, data?: any) {
-    const response = await API.post('ClstAPI', path, { body: data })
-    return response
+    try {
+      const restOperation = post({
+        apiName: 'ClstAPI',
+        path: path,
+        options: {
+          body: data
+        }
+      })
+      
+      const { body } = await restOperation.response
+      const response = await body.json()
+      return response
+    } catch (error) {
+      console.error('POST request failed:', error)
+      throw error
+    }
   }
 
   async put(path: string, data?: any) {
-    const response = await API.put('ClstAPI', path, { body: data })
-    return response
+    try {
+      const restOperation = put({
+        apiName: 'ClstAPI',
+        path: path,
+        options: {
+          body: data
+        }
+      })
+      
+      const { body } = await restOperation.response
+      const response = await body.json()
+      return response
+    } catch (error) {
+      console.error('PUT request failed:', error)
+      throw error
+    }
   }
 
   async delete(path: string) {
-    const response = await API.del('ClstAPI', path, {})
-    return response
+    try {
+      const restOperation = del({
+        apiName: 'ClstAPI',
+        path: path
+      })
+      
+      const { body } = await restOperation.response
+      const response = await body.json()
+      return response
+    } catch (error) {
+      console.error('DELETE request failed:', error)
+      throw error
+    }
   }
 
   // File upload using S3
   async uploadFile(file: File, path: string) {
-    const result = await Storage.put(path, file, {
-      contentType: file.type,
-      progressCallback: (progress) => {
-        console.log(`Uploaded: ${progress.loaded}/${progress.total}`)
-      }
-    })
-    return result
+    try {
+      const result = await uploadData({
+        key: path,
+        data: file,
+        options: {
+          contentType: file.type,
+          onProgress: ({ transferredBytes, totalBytes }) => {
+            if (totalBytes) {
+              console.log(`Uploaded: ${transferredBytes}/${totalBytes}`)
+            }
+          }
+        }
+      }).result
+      
+      return result
+    } catch (error) {
+      console.error('Upload failed:', error)
+      throw error
+    }
   }
 
   async getFileUrl(key: string) {
-    const url = await Storage.get(key)
-    return url
+    try {
+      const urlResult = await getUrl({
+        key: key,
+        options: {
+          expiresIn: 3600 // 1 hour
+        }
+      })
+      
+      return urlResult.url
+    } catch (error) {
+      console.error('Get URL failed:', error)
+      throw error
+    }
   }
 }
 
