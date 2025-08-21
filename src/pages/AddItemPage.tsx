@@ -235,7 +235,7 @@ const AddItemPage = () => {
             value={itemData.brand}
             onChange={(e) => handleInputChange('brand', e.target.value)}
             style={inputStyle}
-            placeholder="e.g., Nike, Zara, H&M"
+            placeholder="e.g., COS, Madewell, Ralph Lauren"
           />
           {errors.brand && <div style={errorStyle}>{errors.brand}</div>}
         </label>
@@ -261,7 +261,7 @@ const AddItemPage = () => {
             value={itemData.size}
             onChange={(e) => handleInputChange('size', e.target.value)}
             style={inputStyle}
-            placeholder="e.g., M, L, 9, 32"
+            placeholder="e.g., S, M, 9, 30"
           />
           {errors.size && <div style={errorStyle}>{errors.size}</div>}
         </label>
