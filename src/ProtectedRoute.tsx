@@ -1,37 +1,29 @@
 import React, { useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './App'
-import { fetchAuthSession } from 'aws-amplify/auth'
+import { getCurrentUser } from 'aws-amplify/auth'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isAuthenticated, checkAuthState } = useAuth()
+  const { isAuthenticated } = useAuth()
   const location = useLocation()
   const [isChecking, setIsChecking] = useState(true)
   const [isAuthed, setIsAuthed] = useState(false)
 
   useEffect(() => {
-    // Double-check authentication status using fetchAuthSession instead of getCurrentUser
+    // Double-check authentication status
     checkAuth()
   }, [])
 
   const checkAuth = async () => {
     try {
-      // Use fetchAuthSession which doesn't throw NotAuthorizedException
-      const session = await fetchAuthSession()
-      
-      // Check if we have valid tokens
-      if (session.tokens) {
-        setIsAuthed(true)
-      } else {
-        console.log('No valid session in ProtectedRoute')
-        setIsAuthed(false)
-      }
+      await getCurrentUser()
+      setIsAuthed(true)
     } catch (error) {
-      console.log('Error checking auth in ProtectedRoute:', error)
+      console.log('No authenticated user in ProtectedRoute')
       setIsAuthed(false)
     } finally {
       setIsChecking(false)
@@ -59,3 +51,5 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   return <>{children}</>
 }
+
+export default ProtectedRoute
