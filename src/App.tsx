@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, createContext, useContext, useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { getCurrentUser, signOut, fetchAuthSession } from 'aws-amplify/auth'
+import { getCurrentUser, signOut, fetchAuthSession, AuthUser } from 'aws-amplify/auth'
 import { Hub } from 'aws-amplify/utils'
 import ConfigureAmplify from './ConfigureAmplify' // Import ConfigureAmplify
 
@@ -348,6 +348,7 @@ const Footer = () => (
 function AppContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null)
 
   // Add global styles
   React.useEffect(() => {
@@ -373,21 +374,36 @@ function AppContent() {
     try {
       console.log('Checking auth state...')
       
-      // Try to get current authenticated user
-      const user = await getCurrentUser()
-      console.log('User authenticated:', user)
-      
-      // Also verify session is valid
+      // First check if there's a session
+      // This won't throw an error even if user is not authenticated
       const session = await fetchAuthSession()
-      console.log('Session valid:', !!session.tokens)
+      console.log('Session exists:', !!session.tokens)
       
       if (session.tokens) {
-        setIsAuthenticated(true)
+        try {
+          // Only try to get current user if we have tokens
+          const user = await getCurrentUser()
+          console.log('User authenticated:', user)
+          setIsAuthenticated(true)
+        } catch (userError: any) {
+          // Token might be expired or invalid
+          console.log('Session exists but user fetch failed:', userError.message)
+          setIsAuthenticated(false)
+        }
       } else {
+        // No session tokens means no authenticated user
+        console.log('No active session')
         setIsAuthenticated(false)
       }
-    } catch (error) {
-      console.log('No authenticated user:', error)
+    } catch (error: any) {
+      // This catches any other errors
+      if (error.name === 'NotAuthorizedException') {
+        // This is expected when no user is signed in
+        console.log('No authenticated user (expected on first load)')
+      } else {
+        // Log unexpected errors
+        console.error('Unexpected error checking auth:', error)
+      }
       setIsAuthenticated(false)
     } finally {
       setIsCheckingAuth(false)
@@ -400,9 +416,13 @@ function AppContent() {
       // Use Amplify Auth to sign out
       await signOut()
       setIsAuthenticated(false)
+      setCurrentUser(null)
       console.log('User signed out successfully')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error signing out:', error)
+      // Even if signout fails, clear local state
+      setIsAuthenticated(false)
+      setCurrentUser(null)
     }
   }
 
@@ -412,16 +432,19 @@ function AppContent() {
     checkAuthState()
 
     // Listen for auth events
-    const hubListener = Hub.listen('auth', (data) => {
-      console.log('Auth event:', data.payload.event)
-      switch (data.payload.event) {
+    const hubListener = Hub.listen('auth', ({ payload }) => {
+      console.log('Auth event:', payload.event)
+      switch (payload.event) {
         case 'signedIn':
           console.log('User signed in')
           setIsAuthenticated(true)
+          // Optionally fetch user details
+          checkAuthState()
           break
         case 'signedOut':
           console.log('User signed out')
           setIsAuthenticated(false)
+          setCurrentUser(null)
           break
         case 'tokenRefresh':
           console.log('Token refreshed')
@@ -430,6 +453,12 @@ function AppContent() {
         case 'tokenRefresh_failure':
           console.log('Token refresh failed')
           setIsAuthenticated(false)
+          setCurrentUser(null)
+          break
+        case 'signIn_failure':
+          console.log('Sign in failed')
+          setIsAuthenticated(false)
+          setCurrentUser(null)
           break
       }
     })
