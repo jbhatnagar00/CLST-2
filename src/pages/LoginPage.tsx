@@ -6,15 +6,23 @@ import { signIn } from 'aws-amplify/auth'
 const LoginPage = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { setIsAuthenticated, checkAuthState } = useAuth()
+  const { setIsAuthenticated } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
   React.useEffect(() => {
     document.title = 'Log In - CLST'
-  }, [])
+    
+    // Check if there's a success message from email verification
+    if (location.state?.message) {
+      setSuccess(location.state.message)
+      // Clear the message from location state
+      window.history.replaceState({}, document.title)
+    }
+  }, [location])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,10 +37,14 @@ const LoginPage = () => {
     }
 
     try {
+      // Debug: Log what we're sending (without password)
+      console.log('Attempting sign in with email:', email)
+      
       // Use Amplify Auth to sign in
+      // Since username_attributes is ["email"], we use email as username
       const { isSignedIn, nextStep } = await signIn({ 
-        username: email, 
-        password 
+        username: email.toLowerCase().trim(), // Ensure lowercase and no spaces
+        password: password.trim() // Remove any accidental spaces
       })
       
       console.log('Sign in result:', { isSignedIn, nextStep })
@@ -41,10 +53,8 @@ const LoginPage = () => {
         // Update auth state
         setIsAuthenticated(true)
         
-        // Double-check auth state
-        await checkAuthState()
-        
-        // Navigate to originally requested page or closet
+        // Don't call checkAuthState here - it will be triggered by the Hub listener
+        // Just navigate immediately
         const from = location.state?.from?.pathname || '/closet'
         navigate(from, { replace: true })
       } else {
@@ -54,6 +64,14 @@ const LoginPage = () => {
         } else if (nextStep.signInStep === 'NEW_PASSWORD_REQUIRED') {
           setError('You need to set a new password')
           // You might want to navigate to a new password page
+        } else if (nextStep.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
+          setError('You need to confirm your new password')
+        } else if (nextStep.signInStep === 'CONFIRM_SIGN_IN_WITH_CUSTOM_CHALLENGE') {
+          setError('Please complete the challenge')
+        } else if (nextStep.signInStep === 'CONFIRM_SIGN_IN_WITH_SMS_CODE') {
+          setError('Please enter the SMS code')
+        } else if (nextStep.signInStep === 'CONFIRM_SIGN_IN_WITH_TOTP_CODE') {
+          setError('Please enter your authenticator code')
         } else {
           setError(`Additional step required: ${nextStep.signInStep}`)
         }
@@ -68,6 +86,10 @@ const LoginPage = () => {
         setError('Incorrect email or password')
       } else if (err.name === 'UserNotConfirmedException') {
         setError('Please verify your email before signing in')
+      } else if (err.name === 'PasswordResetRequiredException') {
+        setError('Password reset is required. Please reset your password.')
+      } else if (err.name === 'NetworkError') {
+        setError('Network error. Please check your connection.')
       } else {
         setError(err.message || 'An error occurred during sign in')
       }
@@ -124,6 +146,20 @@ const LoginPage = () => {
         }}>
           Log in to access your digital closet
         </p>
+
+        {success && (
+          <div style={{
+            backgroundColor: '#efe',
+            border: '1px solid #cfc',
+            color: '#060',
+            padding: '0.75rem',
+            borderRadius: '0.25rem',
+            marginBottom: '1rem',
+            fontSize: '0.875rem'
+          }}>
+            {success}
+          </div>
+        )}
 
         {error && (
           <div style={{
