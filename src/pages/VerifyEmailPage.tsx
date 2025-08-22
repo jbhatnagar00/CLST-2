@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
-import { confirmSignUp, resendSignUpCode, autoSignIn } from 'aws-amplify/auth'
+import { confirmSignUp, resendSignUpCode, signIn } from 'aws-amplify/auth'
+import { useAuth } from '../App'
 
 const VerifyEmailPage = () => {
   const navigate = useNavigate()
   const location = useLocation()
+  const { setIsAuthenticated } = useAuth() // Get auth context
   const [code, setCode] = useState('')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('') // Store password if passed from register
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -15,9 +18,11 @@ const VerifyEmailPage = () => {
   useEffect(() => {
     document.title = 'Verify Email - CLST'
     
-    // Get email from navigation state or sessionStorage
+    // Get email and password from navigation state or sessionStorage
     const emailFromState = location.state?.email
+    const passwordFromState = location.state?.password
     const emailFromStorage = sessionStorage.getItem('pendingVerificationEmail')
+    const passwordFromStorage = sessionStorage.getItem('pendingVerificationPassword')
     
     if (emailFromState) {
       setEmail(emailFromState)
@@ -26,6 +31,12 @@ const VerifyEmailPage = () => {
     } else {
       // If no email found, redirect to register
       navigate('/auth/register')
+    }
+    
+    if (passwordFromState) {
+      setPassword(passwordFromState)
+    } else if (passwordFromStorage) {
+      setPassword(passwordFromStorage)
     }
   }, [location, navigate])
 
@@ -57,32 +68,45 @@ const VerifyEmailPage = () => {
       console.log('Confirmation result:', { isSignUpComplete, nextStep })
 
       if (isSignUpComplete) {
-        setSuccess('Email verified successfully! Signing you in...')
+        setSuccess('Email verified successfully!')
         
-        // Clear the stored email
+        // Clear the stored email and password
         sessionStorage.removeItem('pendingVerificationEmail')
+        sessionStorage.removeItem('pendingVerificationPassword')
         
-        // Try to auto sign in
-        try {
-          const signInResult = await autoSignIn()
-          console.log('Auto sign in result:', signInResult)
-          
-          if (signInResult.isSignedIn) {
-            // Navigate to closet after successful auto sign in
-            setTimeout(() => {
-              navigate('/closet')
-            }, 1000)
-          } else {
-            // If auto sign in didn't work, redirect to login
+        // If we have the password, try to sign in automatically
+        if (password) {
+          setSuccess('Email verified! Signing you in...')
+          try {
+            const { isSignedIn } = await signIn({
+              username: email.toLowerCase().trim(),
+              password: password
+            })
+            
+            if (isSignedIn) {
+              setIsAuthenticated(true)
+              setTimeout(() => {
+                navigate('/closet')
+              }, 500)
+            } else {
+              // Sign in didn't complete, redirect to login
+              setTimeout(() => {
+                navigate('/auth/login', { 
+                  state: { message: 'Email verified! Please log in.' } 
+                })
+              }, 1500)
+            }
+          } catch (signInError) {
+            console.log('Auto sign in failed:', signInError)
+            // Redirect to login page
             setTimeout(() => {
               navigate('/auth/login', { 
                 state: { message: 'Email verified! Please log in.' } 
               })
             }, 1500)
           }
-        } catch (autoSignInError) {
-          console.log('Auto sign in failed, redirecting to login:', autoSignInError)
-          // If auto sign in fails, redirect to login
+        } else {
+          // No password stored, redirect to login
           setTimeout(() => {
             navigate('/auth/login', { 
               state: { message: 'Email verified! Please log in.' } 
