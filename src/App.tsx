@@ -34,6 +34,7 @@ const MarketplacePage = lazy(() => import('./pages/MarketplacePage'))
 const TrendsPage = lazy(() => import('./pages/TrendsPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'))
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
 
 // Loading component for Suspense fallback
@@ -500,6 +501,7 @@ function AppContent() {
                   <Route path="/" element={<HomePage />} />
                   <Route path="/auth/login" element={<LoginPage />} />
                   <Route path="/auth/register" element={<RegisterPage />} />
+                  <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
                   <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
                   
                   {/* Protected Routes */}
