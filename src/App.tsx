@@ -2,6 +2,7 @@ import React, { Suspense, lazy, createContext, useContext, useState, useEffect }
 import { BrowserRouter as Router, Routes, Route, Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { getCurrentUser, signOut, fetchAuthSession } from 'aws-amplify/auth'
 import { Hub } from 'aws-amplify/utils'
+import ConfigureAmplify from './ConfigureAmplify' // Import ConfigureAmplify
 
 // Lazy load components
 const ProtectedRoute = lazy(() => import('./ProtectedRoute'))
@@ -343,8 +344,8 @@ const Footer = () => (
   </footer>
 )
 
-// Main App component with performance optimizations
-function App() {
+// Main App content component (separated from App to be inside ConfigureAmplify)
+function AppContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
@@ -407,6 +408,7 @@ function App() {
 
   useEffect(() => {
     // Check auth state on mount
+    // This will now only run AFTER Amplify is configured
     checkAuthState()
 
     // Listen for auth events
@@ -505,6 +507,25 @@ function App() {
         </Router>
       </ErrorBoundary>
     </AuthContext.Provider>
+  )
+}
+
+// Main App component wrapped with ConfigureAmplify
+function App() {
+  return (
+    <ConfigureAmplify 
+      blockRoutes={true}
+      onConfigured={() => {
+        console.log('✅ Amplify configured successfully - Auth methods are now safe to use')
+      }}
+      onError={(error) => {
+        console.error('❌ Failed to configure Amplify:', error)
+        // You could also show a user-friendly error here
+      }}
+      showDebugInfo={process.env.NODE_ENV === 'development'}
+    >
+      <AppContent />
+    </ConfigureAmplify>
   )
 }
 
