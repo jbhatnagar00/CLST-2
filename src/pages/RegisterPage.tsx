@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { signUp } from 'aws-amplify/auth'
 
 const RegisterPage = () => {
   const navigate = useNavigate()
@@ -11,6 +12,7 @@ const RegisterPage = () => {
   })
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [needsVerification, setNeedsVerification] = useState(false)
 
   React.useEffect(() => {
     document.title = 'Sign Up - CLST'
@@ -21,6 +23,26 @@ const RegisterPage = () => {
       ...formData,
       [e.target.name]: e.target.value
     })
+  }
+
+  const validatePassword = (password: string): string | null => {
+    // Match Cognito requirements from amplify_outputs.json
+    if (password.length < 8) {
+      return 'Password must be at least 8 characters long'
+    }
+    if (!/[a-z]/.test(password)) {
+      return 'Password must contain at least one lowercase letter'
+    }
+    if (!/[A-Z]/.test(password)) {
+      return 'Password must contain at least one uppercase letter'
+    }
+    if (!/[0-9]/.test(password)) {
+      return 'Password must contain at least one number'
+    }
+    if (!/[^a-zA-Z0-9]/.test(password)) {
+      return 'Password must contain at least one special character'
+    }
+    return null
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,8 +57,10 @@ const RegisterPage = () => {
       return
     }
 
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long')
+    // Validate password against Cognito requirements
+    const passwordError = validatePassword(formData.password)
+    if (passwordError) {
+      setError(passwordError)
       setIsLoading(false)
       return
     }
@@ -47,15 +71,51 @@ const RegisterPage = () => {
       return
     }
 
-    // TODO: Replace with actual registration logic
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Sign up with Cognito
+      const { isSignUpComplete, userId, nextStep } = await signUp({
+        username: formData.email.toLowerCase().trim(), // Use email as username
+        password: formData.password,
+        options: {
+          userAttributes: {
+            email: formData.email.toLowerCase().trim(),
+            name: formData.name.trim()
+          },
+          autoSignIn: true // Will auto sign in after confirmation
+        }
+      })
+
+      console.log('Sign up result:', { isSignUpComplete, userId, nextStep })
+
+      if (nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
+        // User needs to verify email
+        setNeedsVerification(true)
+        // Store email in sessionStorage for the verification page
+        sessionStorage.setItem('pendingVerificationEmail', formData.email)
+        // Navigate to verification page
+        navigate('/auth/verify-email', { 
+          state: { email: formData.email } 
+        })
+      } else if (isSignUpComplete) {
+        // Rare case where no verification is needed
+        navigate('/auth/login')
+      }
+    } catch (err: any) {
+      console.error('Sign up error:', err)
       
-      // For demo purposes, navigate to closet
-      navigate('/closet')
-    } catch (err) {
-      setError('An error occurred. Please try again.')
+      if (err.name === 'UsernameExistsException') {
+        setError('An account with this email already exists')
+      } else if (err.name === 'InvalidPasswordException') {
+        setError(err.message || 'Password does not meet requirements')
+      } else if (err.name === 'InvalidParameterException') {
+        if (err.message.includes('email')) {
+          setError('Please enter a valid email address')
+        } else {
+          setError(err.message || 'Invalid input provided')
+        }
+      } else {
+        setError(err.message || 'An error occurred during sign up')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -140,6 +200,7 @@ const RegisterPage = () => {
               onBlur={(e) => e.target.style.borderColor = '#e5e5e5'}
               placeholder="Jane Doe"
               disabled={isLoading}
+              autoComplete="name"
             />
           </div>
 
@@ -158,6 +219,7 @@ const RegisterPage = () => {
               onBlur={(e) => e.target.style.borderColor = '#e5e5e5'}
               placeholder="you@example.com"
               disabled={isLoading}
+              autoComplete="email"
             />
           </div>
 
@@ -176,14 +238,32 @@ const RegisterPage = () => {
               onBlur={(e) => e.target.style.borderColor = '#e5e5e5'}
               placeholder="••••••••"
               disabled={isLoading}
+              autoComplete="new-password"
             />
-            <p style={{
+            <div style={{
               fontSize: '0.75rem',
               color: '#666',
               marginTop: '0.25rem'
             }}>
-              Must be at least 8 characters
-            </p>
+              <div>Password must contain:</div>
+              <ul style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
+                <li style={{ color: formData.password.length >= 8 ? 'green' : '#666' }}>
+                  At least 8 characters
+                </li>
+                <li style={{ color: /[a-z]/.test(formData.password) ? 'green' : '#666' }}>
+                  One lowercase letter
+                </li>
+                <li style={{ color: /[A-Z]/.test(formData.password) ? 'green' : '#666' }}>
+                  One uppercase letter
+                </li>
+                <li style={{ color: /[0-9]/.test(formData.password) ? 'green' : '#666' }}>
+                  One number
+                </li>
+                <li style={{ color: /[^a-zA-Z0-9]/.test(formData.password) ? 'green' : '#666' }}>
+                  One special character
+                </li>
+              </ul>
+            </div>
           </div>
 
           <div style={{ marginBottom: '2rem' }}>
@@ -201,6 +281,7 @@ const RegisterPage = () => {
               onBlur={(e) => e.target.style.borderColor = '#e5e5e5'}
               placeholder="••••••••"
               disabled={isLoading}
+              autoComplete="new-password"
             />
           </div>
 
