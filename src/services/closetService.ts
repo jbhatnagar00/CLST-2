@@ -4,8 +4,8 @@ import { storageService } from './storageService';
 import { getCurrentUser } from 'aws-amplify/auth';
 import type { Schema } from '../../amplify/data/resource';
 
-//const client = generateClient<Schema>();
-const client = generateClient();
+const client = generateClient<Schema>();
+//const client = generateClient();
 
 interface AddItemData {
   photos: File[]
