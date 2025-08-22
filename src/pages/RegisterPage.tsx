@@ -80,8 +80,8 @@ const RegisterPage = () => {
           userAttributes: {
             email: formData.email.toLowerCase().trim(),
             name: formData.name.trim()
-          },
-          autoSignIn: true // Will auto sign in after confirmation
+          }
+          // Removed autoSignIn as it's causing issues
         }
       })
 
@@ -90,11 +90,15 @@ const RegisterPage = () => {
       if (nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
         // User needs to verify email
         setNeedsVerification(true)
-        // Store email in sessionStorage for the verification page
+        // Store email and password in sessionStorage for the verification page
         sessionStorage.setItem('pendingVerificationEmail', formData.email)
+        sessionStorage.setItem('pendingVerificationPassword', formData.password)
         // Navigate to verification page
         navigate('/auth/verify-email', { 
-          state: { email: formData.email } 
+          state: { 
+            email: formData.email,
+            password: formData.password // Pass password for auto sign-in after verification
+          } 
         })
       } else if (isSignUpComplete) {
         // Rare case where no verification is needed
